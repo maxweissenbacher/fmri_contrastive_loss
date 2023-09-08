@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from models.losses.contrastive_losses import contr_loss_simple
 from tqdm import tqdm
 import numpy as np
+import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
     device = 'cpu'
@@ -45,6 +46,9 @@ if __name__ == '__main__':
     output = model(torch.tensor(raw_features))
     print(output.shape)
 
+    # Set up for logging training metrics
+    losses = []
+
     # Training loop
     pbar = tqdm(range(num_epochs))
     for epoch in pbar:
@@ -83,3 +87,6 @@ if __name__ == '__main__':
                         f'learning rate {optimizer.param_groups[0]["lr"]:.9f}'
         )
         pbar.set_description(description)
+
+        # Logging
+        losses.append(np.array(avg_loss).mean())
