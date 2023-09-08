@@ -77,6 +77,7 @@ if __name__ == '__main__':
             # Remember loss and gradient norm per batch
             avg_loss.append(loss.detach().item())
             avg_gn.append(gn.detach().item())
+
         # Update learning rate
         scheduler.step()
 
@@ -90,3 +91,9 @@ if __name__ == '__main__':
 
         # Logging
         losses.append(np.array(avg_loss).mean())
+
+    # Plot losses
+    plt.plot(losses)
+    plt.title('Losses (averaged over batches) by epoch')
+    plt.show()
+
