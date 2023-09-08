@@ -5,6 +5,7 @@ from models.vision_transformer import VisionTransformer
 from torch.utils.data import DataLoader
 from models.losses.contrastive_losses import contr_loss_simple
 from tqdm import tqdm
+import numpy as np
 
 if __name__ == '__main__':
     device = 'cpu'
@@ -12,9 +13,9 @@ if __name__ == '__main__':
 
     # Load data
     cwd = Path.cwd()  # Current working directory
-    rel_path = 'data/timeseries_max_all_subjects.hdf5'  # Relative path from project directory
+    rel_path = 'data/timeseries_max_all_subjects.hdf5'  # Relative path from project directory, depends on where you store the data
     file_path = (cwd.parent / rel_path).resolve()
-    data = load_data(file_path, number_patients=10)
+    data = load_data(file_path, number_patients=10)  # Load only subset of patients for testing for now
 
     # data is a dict, extract the relevant entries
     raw_features = data['raw']
@@ -35,7 +36,7 @@ if __name__ == '__main__':
     eps = 10
     num_epochs = 500
 
-    # Instantiate model and optimiser
+    # Instantiate model, optimiser and learning rate scheduler
     model = VisionTransformer(n_chans, d_init, d_model, n_hidden, n_head, n_layers, device)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, num_epochs, 0.0)
@@ -47,7 +48,9 @@ if __name__ == '__main__':
     # Training loop
     pbar = tqdm(range(num_epochs))
     for epoch in pbar:
-        # iterate over all data 
+        avg_loss = []  # average loss across batches
+        avg_gn = []    # average gradient norm across batches
+        # iterate over all data
         for (d, batch_idx) in dataloader:
             batch_idx = batch_idx.detach().numpy()
             # get submatrices of same and diff
@@ -66,13 +69,17 @@ if __name__ == '__main__':
             gn = torch.nn.utils.clip_grad_norm_(model.parameters(), 100.)
             # Take the optimisation step
             optimizer.step()
+
+            # Remember loss and gradient norm per batch
+            avg_loss.append(loss.detach().item())
+            avg_gn.append(gn.detach().item())
         # Update learning rate
         scheduler.step()
 
         # Update progress bar
         description = (
-                        f'Loss {loss.item():.2f} | '
-                        f'grad norm {gn.item():.2f} | '
+                        f'Loss {np.array(avg_loss).mean():.2f} | '  
+                        f'grad norm {np.array(avg_gn).mean():.2f} | '
                         f'learning rate {optimizer.param_groups[0]["lr"]:.9f}'
         )
         pbar.set_description(description)
