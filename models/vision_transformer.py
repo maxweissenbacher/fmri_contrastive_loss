@@ -107,7 +107,9 @@ class MultiHeadAttention(nn.Module):
 
     def split(self, tensor):
         batch_size, length, d_model = tensor.size()
-        d_tensor = d_model // self.n_head 
+        if d_model % self.n_head != 0:
+            raise AssertionError('Model dimension d_model must be dividable by number of attention heads n_head.')
+        d_tensor = d_model // self.n_head
         # this splits a big vector of size (x,y,z) into (x,y,n_head,z/n_head)
         tensor = tensor.view(batch_size, length, self.n_head, d_tensor)
         # transpose to (batch_size, nr_heads, length, d_model/nr_heads) 
