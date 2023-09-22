@@ -22,7 +22,7 @@ def load_data(path, number_patients = None):
     nr_subj = number_patients if number_patients is not None else len(tss.keys())
     for i ,subj in enumerate(tss.keys()):
         if i% 100 == 0:
-            print(f'Loaded {i} scans...')
+            print(f'Loaded {i} patients...')
         if i > nr_subj: break  # Just x subjects so that it runs faster
         for j, scan in enumerate(tss[subj].keys()):  # 4 scans roughly per subject
             # extract raw time series
