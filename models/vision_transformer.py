@@ -175,6 +175,10 @@ class VisionTransformer(nn.Module):
         for layer in self.layers:
             x = layer(x)
         # final output is of size [n_batches, N_c, d_model]
+        # TO-DO:
+        # Check if this output size is correct! Shouldn't it be [n_batches, d_model]?
+
+        # Is this necessary? We want to just pick the first entry, like below!
         # One final linear layer over all dimensions
         x = torch.flatten(x, start_dim=1)
         x = self.linear2(x)  # shape [batch_size, 1] ... the 1 is the FINAL embedding dimension of the model
