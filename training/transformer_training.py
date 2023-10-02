@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    device = 'cpu'
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch_size = 512
 
     # Load data
@@ -29,13 +29,14 @@ if __name__ == '__main__':
     # Hyperparameters
     n_chans = raw_features.shape[1]
     d_init = raw_features.shape[2]
-    d_model = 10
-    n_hidden = 10
-    n_head = 5
+    d_model = 30 # 10
+    n_hidden = 15 # 10
+    # d_model must be divisable by n_head
+    n_head = 5 # 5
     n_layers = 1
     lr = 1e-5
     eps = 10
-    num_epochs = 500
+    num_epochs = 300
 
     # Instantiate model, optimiser and learning rate scheduler
     model = VisionTransformer(n_chans, d_init, d_model, n_hidden, n_head, n_layers, device)
