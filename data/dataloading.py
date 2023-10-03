@@ -3,12 +3,14 @@ import numpy as np
 import spatiotemporal
 from torch.utils.data import DataLoader, Dataset
 import torch
+import time
 
-def load_data(path, number_patients = None):
+def load_data(path, number_patients=None, progress=False):
     """
     path points to wherever the dataset is (this depends on where the function is called from)
     number_patients is Int, number of patients to be loaded. If None, all patients are loaded
     """
+    start_time = time.time()
     # Load my dataset
     f = h5py.File(path, "r")
     tss = f['timeseries'] # Subject timeseries, four sessions of 360 timeseries for each subject
@@ -21,8 +23,9 @@ def load_data(path, number_patients = None):
     label = []
     nr_subj = number_patients if number_patients is not None else len(tss.keys())
     for i ,subj in enumerate(tss.keys()):
-        if i% 100 == 0:
-            print(f'Loaded {i} patients...')
+        if progress:
+            if i% 100 == 0:
+                print(f'Loaded {i} patients...')
         if i > nr_subj: break  # Just x subjects so that it runs faster
         for j, scan in enumerate(tss[subj].keys()):  # 4 scans roughly per subject
             # extract raw time series
@@ -58,7 +61,8 @@ def load_data(path, number_patients = None):
          'diff_subject': diff_subject
          }
 
-    print('Data loading complete.')
+    end_time = time.time()
+    print(f'Data loading complete ({nr_subj} patients, {end_time - start_time:.2f}s.).')
 
     return d
 
