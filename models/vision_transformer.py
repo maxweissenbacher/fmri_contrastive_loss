@@ -33,13 +33,11 @@ z_l = MLP(LN(z_l)) + z'_l [MLP, residual connection]
 y = LN(z_L^0) [as output we take first encoded element of final layer, this is our encoding which I need to train with contrastive loss]
 '''
 
-device='cpu'
-
 class PositionalEncoding(nn.Module):
     """
     compute trivial positional encoding
     """
-    def __init__(self, length, d_model):
+    def __init__(self, length, d_model, device):
         """
         constructor of positional encoding class
         :param n_clengthhans: first dimension of input
@@ -49,7 +47,7 @@ class PositionalEncoding(nn.Module):
         super(PositionalEncoding, self).__init__()
         #self.encoding = torch.zeros(n_chans, d_model)
 
-        pos = torch.arange(0,length, device = device)
+        pos = torch.arange(0, length, device=device)
         pos = pos.float().unsqueeze(dim=1) # makes pos into [n_chans,1]
 
         #every element in d_model gets a vector [n_chans,1]; not sure this will work
@@ -78,15 +76,15 @@ class ScaleDotProductAttention(nn.Module):
 
 class MultiHeadAttention(nn.Module):
     
-    def __init__(self, d_model, n_head):
+    def __init__(self, d_model, n_head, device):
         super(MultiHeadAttention, self).__init__()
         self.n_head = n_head
         self.attention = ScaleDotProductAttention()
         # to get the q,v,k we do a linear multiplication
-        self.w_q = nn.Linear(d_model, d_model)
-        self.w_k = nn.Linear(d_model, d_model)
-        self.w_v = nn.Linear(d_model, d_model)
-        self.w_concat = nn.Linear(d_model, d_model)
+        self.w_q = nn.Linear(d_model, d_model, device=device)
+        self.w_k = nn.Linear(d_model, d_model, device=device)
+        self.w_v = nn.Linear(d_model, d_model, device=device)
+        self.w_concat = nn.Linear(d_model, d_model, device=device)
     
     def forward(self, q, k, v):
         # take in Q,K,V and do dot product with big weight matrices
@@ -125,12 +123,12 @@ class MultiHeadAttention(nn.Module):
         return tensor
     
 class LayerNorm(nn.Module):
-    def __init__(self, d_model, eps=1e-12):
+    def __init__(self, d_model, device, eps=1e-12):
         super(LayerNorm, self).__init__()
         # Parameters are Tensor subclasses, that have a very special property when used with Module s - when they’re assigned as 
         # Module attributes they are automatically added to the list of its parameters, and will appear e.g. in parameters() iterator. Also requires_grad is by default true
-        self.gamma = nn.Parameter(torch.ones(d_model))
-        self.beta = nn.Parameter(torch.zeros(d_model))
+        self.gamma = nn.Parameter(torch.ones(d_model, device=device))
+        self.beta = nn.Parameter(torch.zeros(d_model, device=device))
         self.eps = eps
 
     def forward(self, x):
@@ -143,15 +141,15 @@ class LayerNorm(nn.Module):
 
 class OneLayer(nn.Module):
 
-    def __init__(self, d_init, d_model, n_hidden, n_head):
+    def __init__(self, d_init, d_model, n_hidden, n_head, device):
         super(OneLayer, self).__init__()
-        self.attention = MultiHeadAttention(d_model = d_model, n_head = n_head)
-        self.norm1 = LayerNorm(d_model = d_model)
+        self.attention = MultiHeadAttention(d_model=d_model, n_head=n_head, device=device)
+        self.norm1 = LayerNorm(d_model=d_model, device=device)
         # this next piece is the positionwise feedforward - to maintain sizes
-        self.linear2 = nn.Linear(d_model, n_hidden)
+        self.linear2 = nn.Linear(d_model, n_hidden, device=device)
         self.relu = nn.ReLU()
-        self.linear3 = nn.Linear(n_hidden, d_model)
-        self.norm2 = LayerNorm(d_model = d_model)
+        self.linear3 = nn.Linear(n_hidden, d_model, device=device)
+        self.norm2 = LayerNorm(d_model=d_model, device=device)
 
     def forward(self, x):
         # compute linear transformation
@@ -164,10 +162,10 @@ class OneLayer(nn.Module):
 class VisionTransformer(nn.Module):
     def __init__(self, length, d_init, d_model, n_hidden, n_head, n_layers, device):
         super().__init__()
-        self.linear1 = nn.Linear(d_init, d_model) #maps initial dimension to d_model
-        self.encoding = PositionalEncoding(length = length, d_model = d_model)
-        self.layers = nn.ModuleList([OneLayer(d_init=d_init, d_model=d_model, n_hidden=n_hidden, n_head=n_head)])
-        self.linear2 = nn.Linear(d_model*length, 1)
+        self.linear1 = nn.Linear(d_init, d_model, device=device)  #maps initial dimension to d_model
+        self.encoding = PositionalEncoding(length=length, d_model=d_model, device=device)
+        self.layers = nn.ModuleList([OneLayer(d_init=d_init, d_model=d_model, n_hidden=n_hidden, n_head=n_head, device=device)])
+        self.linear2 = nn.Linear(d_model*length, 1, device=device)
 
     def forward(self, x):
         x = self.linear1(x)
@@ -195,6 +193,8 @@ if __name__=="__main__":
     file_path = (cwd.parent / rel_path).resolve()
     data = load_data(file_path, number_patients=10)  # Load only 10 patients for testing
 
+    device = 'cpu'
+
     # data is a dict, extract the relevant entries
     raw_features = data['raw']
     same_subject = data['same_subject']
@@ -208,7 +208,6 @@ if __name__=="__main__":
     n_hidden = 10
     n_head = 5
     n_layers = 1
-    device = 'cpu'
 
     # Map through model to test...
     model = VisionTransformer(n_chans, d_init, d_model, n_hidden, n_head, n_layers, device)
