@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader, Dataset
 import torch
 import time
 
-def load_data(path, number_patients=None, progress=False):
+def load_data(path, number_patients=None, verbose=False):
     """
     path points to wherever the dataset is (this depends on where the function is called from)
     number_patients is Int, number of patients to be loaded. If None, all patients are loaded
@@ -23,9 +23,6 @@ def load_data(path, number_patients=None, progress=False):
     label = []
     nr_subj = number_patients if number_patients is not None else len(tss.keys())
     for i ,subj in enumerate(tss.keys()):
-        if progress:
-            if i% 100 == 0:
-                print(f'Loaded {i} patients...')
         if i > nr_subj: break  # Just x subjects so that it runs faster
         for j, scan in enumerate(tss[subj].keys()):  # 4 scans roughly per subject
             # extract raw time series
@@ -46,6 +43,7 @@ def load_data(path, number_patients=None, progress=False):
     scannum = np.asarray(scannum)
     label = np.asarray(label)  # [[nr of subject, nr of scan],...]
     raw_features = np.asarray(raw_features)  # (nr_scans * nr_subjects) x (nr_voxels) x (length ts)
+    raw_features = raw_features.transpose((0, 2, 1))
 
     # Create a matrix that will allow to query same or different pairs;
     # element (i,j) of the matrix = True if same subject and False if different subject
@@ -63,7 +61,8 @@ def load_data(path, number_patients=None, progress=False):
          }
 
     end_time = time.time()
-    print(f'Data loading complete ({nr_subj} patients, {end_time - start_time:.2f}s.).')
+    if verbose:
+        print(f'Data loading complete ({nr_subj} patients, {end_time - start_time:.2f}s.).')
 
     return d
 
@@ -85,7 +84,7 @@ class ourDataset(Dataset):
         return datapoint, batch_idx
 
 
-def train_test_split(data, perc):
+def train_test_split(data, perc, verbose = False):
     subjects = np.array(list(set(data['subject_number'])))
     nr_subjects = len(subjects)
     nr_subjects_train = int(perc * nr_subjects)
@@ -93,8 +92,8 @@ def train_test_split(data, perc):
     idxs_train = np.array([s in subjects_train for s in data['subject_number']])
     idxs_val = np.logical_not(idxs_train)
 
-    print(
-        f"Total number of scans = {data['raw'].shape[0]}, num of scans in training set = {idxs_train.sum()}, num of scans in testing set = {idxs_val.sum()}.")
+    if verbose:
+        print(f"Total number of scans = {data['raw'].shape[0]}, num of scans in training set = {idxs_train.sum()}, num of scans in testing set = {idxs_val.sum()}.")
 
     d_train = {}
     d_train['raw'] = data['raw'][idxs_train, :]
