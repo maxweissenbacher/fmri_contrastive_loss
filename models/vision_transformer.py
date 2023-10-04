@@ -141,7 +141,7 @@ class LayerNorm(nn.Module):
 
 class OneLayer(nn.Module):
 
-    def __init__(self, d_init, d_model, n_hidden, n_head, device):
+    def __init__(self, d_model, n_hidden, n_head, device):
         super(OneLayer, self).__init__()
         self.attention = MultiHeadAttention(d_model=d_model, n_head=n_head, device=device)
         self.norm1 = LayerNorm(d_model=d_model, device=device)
@@ -164,7 +164,10 @@ class VisionTransformer(nn.Module):
         super().__init__()
         self.linear1 = nn.Linear(d_init, d_model, device=device)  #maps initial dimension to d_model
         self.encoding = PositionalEncoding(length=length, d_model=d_model, device=device)
-        self.layers = nn.ModuleList([OneLayer(d_init=d_init, d_model=d_model, n_hidden=n_hidden, n_head=n_head, device=device)])
+        layer_list = []
+        for _ in range(n_layers):
+            layer_list.append(OneLayer(d_model=d_model, n_hidden=n_hidden, n_head=n_head, device=device))
+        self.layers = nn.ModuleList(layer_list)
         self.linear2 = nn.Linear(d_model*length, 1, device=device)
 
     def forward(self, x):
