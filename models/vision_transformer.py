@@ -169,12 +169,11 @@ class VisionTransformer(nn.Module):
 
     def forward(self, x):
         x = self.linear1(x)
-        x = self.encoding(x) + x # not sure if this goes right; encoding output is [N, d_model]
+        x = self.encoding(x) + x  # not sure if this goes right; encoding output is [N, d_model]
         for layer in self.layers:
             x = layer(x)
-        # final output is of size [n_batches, N_c, d_model]
-        # TO-DO:
-        # Check if this output size is correct! Shouldn't it be [n_batches, d_model]?
+        # final output is of size [n_batches, length, d_model]
+        # Output size is correct (as in the vision transformer paper)
 
         # Is this necessary? We want to just pick the first entry, like below!
         # One final linear layer over all dimensions
@@ -184,8 +183,14 @@ class VisionTransformer(nn.Module):
 
         # Previously, we had this:
         # return x[:,:,0] # not sure, but may make sense to take first element as our encoding
-        # This returns something of shape [batch_size, n_channels] (n_channels = 360)
-    
+        # This returns something of shape [batch_size, length] (currently length = 360)
+        # In the vision transformer paper this would be x[:,0,:] so that we have shape [batch_size, d_model]
+        # --------------
+        # In the vision transformer paper the point is that they use a class embedding token
+        # at position zero, so it makes sense to keep looking at the first output. Can we do that?
+        # Use whatever works at the end of the day... there is no real strong reason to prefer
+        # any final layer architecture over another
+
 if __name__=="__main__":
     # Load data
     cwd = Path.cwd()  # Current working directory
