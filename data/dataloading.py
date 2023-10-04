@@ -50,6 +50,7 @@ def load_data(path, number_patients=None, progress=False):
     # Create a matrix that will allow to query same or different pairs;
     # element (i,j) of the matrix = True if same subject and False if different subject
     same_subject = (subjnum[:, None] == subjnum[None, :]) & (scannum[:, None] != scannum[None, :])
+    np.fill_diagonal(same_subject, np.ones(same_subject.shape[0], dtype=bool))  # modifies diagonal in-place
     # element (i,j) of the matrix = True if different subjects and False if same
     diff_subject = (subjnum[:, None] != subjnum[None, :])
 
