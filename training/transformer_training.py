@@ -1,4 +1,4 @@
-from data.dataloading import load_data, ourDataset
+from data.dataloading import load_data, ourDataset, train_test_split
 from pathlib import Path
 import torch
 from models.vision_transformer import VisionTransformer
@@ -35,23 +35,14 @@ def transformer_train(num_epochs, num_patients, batch_size, hpc=False):
     diff_subject = data['diff_subject']
     print(raw_features.shape)
 
-    # Split into train/test sets by subjects (not by scans)
-    perc_train = .75
-    subjects = np.array(list(set(data['subject_number'])))
-    nr_subjects = len(subjects)
-    nr_subjects_train = int(perc_train * nr_subjects)
-    subjects_train = np.random.choice(subjects, nr_subjects_train, replace=False)
-    idxs_train = np.array([s in subjects_train for s in data['subject_number']])
-    idxs_val = np.logical_not(idxs_train)
+    data_split = train_test_split(data, .75)
 
-    same_subject_train = same_subject[idxs_train, :][:, idxs_train]
-    same_subject_val = same_subject[idxs_val, :][:, idxs_val]
-    diff_subject_train = diff_subject[idxs_train, :][:, idxs_train]
-    diff_subject_val = diff_subject[idxs_val, :][:, idxs_val]
-    raw_features_train = raw_features[idxs_train, :]
-    raw_features_val = raw_features[idxs_val, :]
-
-    print(f'Total number of scans = {raw_features.shape[0]}, num of scans in training set = {idxs_train.sum()}, num of scans in testing set = {idxs_val.sum()}.')
+    same_subject_train = data_split['train']['same_subject']
+    same_subject_val = data_split['val']['same_subject']
+    diff_subject_train = data_split['train']['diff_subject']
+    diff_subject_val = data_split['val']['diff_subject']
+    raw_features_train = data_split['train']['raw']
+    raw_features_val = data_split['val']['raw']
 
     # Convert to dataset and dataloader
     dataset_train = ourDataset(raw_features_train, device=device)

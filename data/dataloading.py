@@ -83,3 +83,27 @@ class ourDataset(Dataset):
         # Preprocess the image and send it to the chosen device ('cpu' or 'cuda')
         datapoint = torch.tensor(datapoint, dtype=torch.float).to(self.the_device)
         return datapoint, batch_idx
+
+
+def train_test_split(data, perc):
+    subjects = np.array(list(set(data['subject_number'])))
+    nr_subjects = len(subjects)
+    nr_subjects_train = int(perc * nr_subjects)
+    subjects_train = np.random.choice(subjects, nr_subjects_train, replace=False)
+    idxs_train = np.array([s in subjects_train for s in data['subject_number']])
+    idxs_val = np.logical_not(idxs_train)
+
+    print(
+        f"Total number of scans = {data['raw'].shape[0]}, num of scans in training set = {idxs_train.sum()}, num of scans in testing set = {idxs_val.sum()}.")
+
+    d_train = {}
+    d_train['raw'] = data['raw'][idxs_train, :]
+    d_train['same_subject'] = data['same_subject'][idxs_train, :][:, idxs_train]
+    d_train['diff_subject'] = data['diff_subject'][idxs_train, :][:, idxs_train]
+    d_val = {}
+    d_val['raw'] = data['raw'][idxs_val, :]
+    d_val['same_subject'] = data['same_subject'][idxs_val, :][:, idxs_val]
+    d_val['diff_subject'] = data['diff_subject'][idxs_val, :][:, idxs_val]
+    d = {'train':d_train, 'val':d_val}
+
+    return d
