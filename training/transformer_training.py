@@ -27,7 +27,7 @@ def transformer_train(num_epochs, num_patients, batch_size, hpc=False):
     rel_path = 'data/timeseries_max_all_subjects.hdf5'  # Relative path from project directory, depends on where you store the data
     file_path = (cwd / rel_path).resolve()
     #file_path = (cwd.parent / rel_path).resolve()
-    data = load_data(file_path, number_patients=num_patients)  # Load only subset of patients for testing for now
+    data = load_data(file_path, number_patients=num_patients, verbose=True)  # Load only subset of patients for testing for now
 
     # data is a dict of numpy arrays, extract the relevant entries
     raw_features = data['raw']
@@ -49,7 +49,7 @@ def transformer_train(num_epochs, num_patients, batch_size, hpc=False):
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size)
 
     # Hyperparameters
-    n_chans = raw_features.shape[1]
+    length = raw_features.shape[1]
     d_init = raw_features.shape[2]
     d_model = 30  # 10
     n_hidden = 15  # 10
@@ -59,12 +59,8 @@ def transformer_train(num_epochs, num_patients, batch_size, hpc=False):
     lr = 1e-5
     eps = 10
 
-    # Right now, the 'length' of the Transformer input is the number of channels
-    # and the number of initial dimensions is the length of each time series...
-    # Shouldn't it be the other way around?
-
     # Instantiate model, optimiser and learning rate scheduler
-    model = VisionTransformer(n_chans, d_init, d_model, n_hidden, n_head, n_layers, device)
+    model = VisionTransformer(length, d_init, d_model, n_hidden, n_head, n_layers, device)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, num_epochs, 0.0)
 
@@ -72,6 +68,7 @@ def transformer_train(num_epochs, num_patients, batch_size, hpc=False):
     test_num = min(10, raw_features.shape[0])
     output = model(torch.tensor(raw_features[:test_num]).to(device))
     print(output.shape)
+    print('Tested successfully.')
 
     # Set up for logging training metrics
     losses = []
