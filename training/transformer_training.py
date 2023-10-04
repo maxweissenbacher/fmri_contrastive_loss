@@ -33,26 +33,25 @@ def transformer_train(num_epochs, num_patients, batch_size, hpc=False):
     raw_features = data['raw']
     same_subject = data['same_subject']
     diff_subject = data['diff_subject']
-    #print(raw_features.shape)
+    print(raw_features.shape)
 
-    # Split into train/test sets
-    # Create train and test datasets
-    perc_train = 75
-    nr_samples = raw_features.shape[0]
-    num_train = int(np.round(nr_samples / 100 * perc_train))
-    print(f'Total number of scans = {nr_samples}, num of scans in training set = {num_train}, num of scans in testing set = {nr_samples - num_train}.')
-    # I want to select a set of patients as train and the rest as val (point being, both should contain enough same patients)
-    idxs = np.arange(nr_samples)
-    idxs_train, idxs_val = idxs[:num_train], idxs[num_train:]
-    # shuffle after selecting
-    np.random.shuffle(idxs_train)
-    np.random.shuffle(idxs_val)
-    same_subject_train = same_subject[idxs_train[:, None], idxs_train[None, :]]
-    same_subject_val = same_subject[idxs_val[:, None], idxs_val[None, :]]
-    diff_subject_train = diff_subject[idxs_train[:, None], idxs_train[None, :]]
-    diff_subject_val = diff_subject[idxs_val[:, None], idxs_val[None, :]]
+    # Split into train/test sets by subjects (not by scans)
+    perc_train = .75
+    subjects = np.array(list(set(data['subject_number'])))
+    nr_subjects = len(subjects)
+    nr_subjects_train = int(perc_train * nr_subjects)
+    subjects_train = np.random.choice(subjects, nr_subjects_train, replace=False)
+    idxs_train = np.array([s in subjects_train for s in data['subject_number']])
+    idxs_val = np.logical_not(idxs_train)
+
+    same_subject_train = same_subject[idxs_train, :][:, idxs_train]
+    same_subject_val = same_subject[idxs_val, :][:, idxs_val]
+    diff_subject_train = diff_subject[idxs_train, :][:, idxs_train]
+    diff_subject_val = diff_subject[idxs_val, :][:, idxs_val]
     raw_features_train = raw_features[idxs_train, :]
     raw_features_val = raw_features[idxs_val, :]
+
+    print(f'Total number of scans = {raw_features.shape[0]}, num of scans in training set = {idxs_train.sum()}, num of scans in testing set = {idxs_val.sum()}.')
 
     # Convert to dataset and dataloader
     dataset_train = ourDataset(raw_features_train, device=device)
@@ -69,6 +68,10 @@ def transformer_train(num_epochs, num_patients, batch_size, hpc=False):
     lr = 1e-5
     eps = 10
 
+    # Right now, the 'length' of the Transformer input is the number of channels
+    # and the number of initial dimensions is the length of each time series...
+    # Shouldn't it be the other way around?
+
     # Instantiate model, optimiser and learning rate scheduler
     model = VisionTransformer(n_chans, d_init, d_model, n_hidden, n_head, n_layers, device)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
@@ -77,7 +80,7 @@ def transformer_train(num_epochs, num_patients, batch_size, hpc=False):
     # Testing model output
     test_num = min(10, raw_features.shape[0])
     output = model(torch.tensor(raw_features[:test_num]).to(device))
-    #print(output.shape)
+    print(output.shape)
 
     # Set up for logging training metrics
     losses = []
@@ -169,7 +172,7 @@ def transformer_train(num_epochs, num_patients, batch_size, hpc=False):
     diffs = dist_train[diff_train_true]
     plt.hist(sames, bins=100, density=True, alpha=.5)
     plt.hist(diffs, bins=100, density=True, alpha=.5)
-    plt.xlabel("Distance on validation data")
+    plt.xlabel("Distance on training data")
     plt.legend(["Same subject", "Different subject"])
     plt.title(
         f"Histogram of training set\nDifference of medians: {np.median(sames) - np.median(diffs):.2f}\nDifference of means: {np.mean(sames) - np.mean(diffs):.2f}")
@@ -237,3 +240,9 @@ def transformer_train(num_epochs, num_patients, batch_size, hpc=False):
     del dataset_val, dataloader_val
     gc.collect()
 
+
+if __name__ == '__main__':
+    transformer_train(num_epochs=5,
+                      num_patients=10,
+                      batch_size=256,
+                      hpc=False)
