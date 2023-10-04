@@ -65,3 +65,5 @@ tzdata==2023.3
 urllib3==2.0.4
 wcwidth==0.2.6
 zipp==3.16.2
+
+optuna~=3.3.0
