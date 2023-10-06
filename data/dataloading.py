@@ -1,11 +1,15 @@
+import secrets
+
 import h5py
 import numpy as np
 import spatiotemporal
 from torch.utils.data import DataLoader, Dataset
 import torch
 import time
+from pathlib import Path
+import matplotlib.pyplot as plt
 
-def load_data(path, number_patients=None, verbose=False):
+def load_data(path, number_patients=None, normalize=False, verbose=False):
     """
     path points to wherever the dataset is (this depends on where the function is called from)
     number_patients is Int, number of patients to be loaded. If None, all patients are loaded
@@ -45,6 +49,9 @@ def load_data(path, number_patients=None, verbose=False):
     raw_features = np.asarray(raw_features)  # (nr_scans * nr_subjects) x (nr_voxels) x (length ts)
     raw_features = raw_features.transpose((0, 2, 1))
 
+    if normalize:
+        raw_features = torch.nn.functional.normalize(torch.tensor(raw_features, dtype=torch.float), dim=1)
+
     # Create a matrix that will allow to query same or different pairs;
     # element (i,j) of the matrix = True if same subject and False if different subject
     same_subject = (subjnum[:, None] == subjnum[None, :]) & (scannum[:, None] != scannum[None, :])
@@ -69,7 +76,7 @@ def load_data(path, number_patients=None, verbose=False):
 
 class ourDataset(Dataset):
     def __init__(self, data, device):
-        self.dataset = data
+        self.dataset = data  # Assumed to be a torch.Tensor
         self.the_device = device
 
     def __len__(self):
@@ -80,15 +87,18 @@ class ourDataset(Dataset):
         datapoint = self.dataset[idx,:]
         batch_idx = idx
         # Preprocess the image and send it to the chosen device ('cpu' or 'cuda')
-        datapoint = torch.tensor(datapoint, dtype=torch.float).to(self.the_device)
+        datapoint = datapoint.to(self.the_device)
         return datapoint, batch_idx
 
 
-def train_test_split(data, perc, verbose = False):
+def train_test_split(data, perc, seed=None, verbose=False):
+    if seed is None:  # If user did not specify seed, choose random seed
+        seed = secrets.randbits(128)
+    rng = np.random.default_rng(seed)  # Ensure reproducibility of train test split
     subjects = np.array(list(set(data['subject_number'])))
     nr_subjects = len(subjects)
     nr_subjects_train = int(perc * nr_subjects)
-    subjects_train = np.random.choice(subjects, nr_subjects_train, replace=False)
+    subjects_train = rng.choice(subjects, nr_subjects_train, replace=False)
     idxs_train = np.array([s in subjects_train for s in data['subject_number']])
     idxs_val = np.logical_not(idxs_train)
 
@@ -103,6 +113,35 @@ def train_test_split(data, perc, verbose = False):
     d_val['raw'] = data['raw'][idxs_val, :]
     d_val['same_subject'] = data['same_subject'][idxs_val, :][:, idxs_val]
     d_val['diff_subject'] = data['diff_subject'][idxs_val, :][:, idxs_val]
-    d = {'train':d_train, 'val':d_val}
+    d = {'train': d_train, 'val': d_val}
 
     return d
+
+
+if __name__ == '__main__':
+    # Some basic data exploration
+    # Load data
+    cwd = Path.cwd()  # Current working directory
+    rel_path = 'data/timeseries_max_all_subjects.hdf5'  # Relative path from project directory, depends on where you store the data
+    file_path = (cwd.parent / rel_path).resolve()
+    data = load_data(file_path, number_patients=100, verbose=True)
+
+    print('here')
+
+    print(data['raw'].shape)
+
+    x = data['raw']
+    xx = torch.nn.functional.normalize(torch.tensor(data['raw']), dim=1)
+
+    # For each patient, plot histogram of L2 norm of each region
+    # i.e. for each patient, and each region, compute the L2 norm of the time series, then plot a histogram over the different regions
+    # The distributions are all fairly similar
+    num_patients = 20
+    for patient_id in range(num_patients):
+        idx = np.where(data['subject_number'] == patient_id)[0][0]
+        plt.hist(torch.linalg.norm(torch.tensor(x), dim=1)[idx, :], histtype='step', bins=15)
+        #plt.title(f"Patient id {data['subject_number'][i]}")
+    plt.legend([f"Patient id {i}" for i in range(num_patients)])
+    plt.show()
+
+
