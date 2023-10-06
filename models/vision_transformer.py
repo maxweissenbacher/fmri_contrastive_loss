@@ -182,6 +182,7 @@ class VisionTransformer(nn.Module):
         # One final linear layer over all dimensions
         x = torch.flatten(x, start_dim=1)
         x = self.linear2(x)  # shape [batch_size, 1] ... the 1 is the FINAL embedding dimension of the model
+        # TO-DO: Normalise output? A final sigmoid layer does not seem to work...
         return x
 
         # Previously, we had this:

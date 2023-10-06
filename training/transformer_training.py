@@ -69,7 +69,7 @@ def transformer_train(num_epochs, num_patients, batch_size, hpc=False):
     eps = 3
 
     # Instantiate model, optimiser and learning rate scheduler
-    model = VisionTransformer(length, d_init, d_model, n_hidden, n_head, n_layers, device, final_sigmoid=True)
+    model = VisionTransformer(length, d_init, d_model, n_hidden, n_head, n_layers, device)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5)
 
