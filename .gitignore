@@ -4,3 +4,4 @@ venv
 logs
 *.png
 *.txt
+*.pkl
