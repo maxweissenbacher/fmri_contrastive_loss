@@ -1,3 +1,4 @@
+import pickle
 from data.dataloading import load_data, ourDataset, train_test_split
 from pathlib import Path
 import torch
@@ -5,21 +6,17 @@ from models.vision_transformer import VisionTransformer
 from torch.utils.data import DataLoader
 from models.losses.contrastive_losses import contr_loss_simple
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.spatial.distance import cdist
 import optuna
-from optuna.trial import TrialState
 
 
-def objective(trial, num_patients=10, batch_size=256, num_epochs=10):
+def objective(trial, num_patients=450, batch_size=128, num_epochs=500):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Load data
     cwd = Path.cwd()  # Current working directory
     rel_path = 'data/timeseries_max_all_subjects.hdf5'  # Relative path from project directory, depends on where you store the data
-    #file_path = (cwd / rel_path).resolve()
-    file_path = (cwd.parent / rel_path).resolve()
-    data = load_data(file_path, number_patients=num_patients)  # Load only subset of patients for testing for now
+    file_path = (cwd / rel_path).resolve()
+    data = load_data(file_path, number_patients=num_patients, normalize=True)
 
     # data is a dict of numpy arrays, extract the relevant entries
     # remove this
@@ -27,7 +24,7 @@ def objective(trial, num_patients=10, batch_size=256, num_epochs=10):
     same_subject = data['same_subject']
     diff_subject = data['diff_subject']
 
-    data_split = train_test_split(data, .75)
+    data_split = train_test_split(data, perc=.75)
 
     raw_features_train = data_split['train']['raw']
     raw_features_val = data_split['val']['raw']
@@ -41,17 +38,23 @@ def objective(trial, num_patients=10, batch_size=256, num_epochs=10):
     # Hyperparameters
     length = raw_features.shape[1]
     d_init = raw_features.shape[2]
-    d_model = trial.suggest_int("d_model", 10, 100, step=10)
-    n_hidden = trial.suggest_int("n_hidden", 10, 50, step=10)
+    d_model = 15
+    #d_model = trial.suggest_int("d_model", 10, 100, step=10)
+    n_hidden = 15
+    #n_hidden = trial.suggest_int("n_hidden", 10, 50, step=10)
     n_head = 5  # d_model must be dividable by n_head
-    n_layers = trial.suggest_int("n_layers", 1, 5)
-    lr = 1e-5
-    eps = trial.suggest_float("eps", 0.1, 10)
+    n_layers = 1
+    #n_layers = trial.suggest_int("n_layers", 1, 5)
+    lr = trial.suggest_float("lr", 1e-6, 1e-1)
+    #lr = 1e-5
+    eps = 3.
+    #eps = trial.suggest_float("eps", 0.1, 10)
 
     # Instantiate model, optimiser and learning rate scheduler
     model = VisionTransformer(length, d_init, d_model, n_hidden, n_head, n_layers, device)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, num_epochs, 0.0)
+    # TO-DO: be careful about lr scheduler.... this might not be the right choice!
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, num_epochs, 0.01 * lr)
 
     # Training loop
     for epoch in range(num_epochs):
@@ -67,9 +70,6 @@ def objective(trial, num_patients=10, batch_size=256, num_epochs=10):
             torch.nn.utils.clip_grad_norm_(model.parameters(), 100.)
             optimizer.step()
 
-        # Update learning rate
-        scheduler.step()
-
         # Evaluate model on validation set
         with torch.no_grad():
             avg_loss = []  # We hope this approximates the true loss well but likely misses lots of interactions
@@ -84,6 +84,9 @@ def objective(trial, num_patients=10, batch_size=256, num_epochs=10):
         val_loss = np.array(avg_loss).mean()
         trial.report(val_loss, epoch)
 
+        # Update learning rate
+        scheduler.step()
+
         # Handle pruning based on the intermediate value.
         if trial.should_prune():
             raise optuna.exceptions.TrialPruned()
@@ -91,23 +94,11 @@ def objective(trial, num_patients=10, batch_size=256, num_epochs=10):
     return val_loss
 
 
-if __name__ == '__main__':
-    study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=10, timeout=600)  # Timeout is in seconds
+def transformer_tuning():
+    study = optuna.create_study(direction="minimize", study_name="Transformer tuning")
+    study.optimize(objective, n_trials=25, timeout=50000)  # Timeout is in seconds
 
-    pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
-    complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
-
-    print("Study statistics: ")
-    print("  Number of finished trials: ", len(study.trials))
-    print("  Number of pruned trials: ", len(pruned_trials))
-    print("  Number of complete trials: ", len(complete_trials))
-
-    print("Best trial:")
-    trial = study.best_trial
-
-    print("  Value: ", trial.value)
-
-    print("  Params: ")
-    for key, value in trial.params.items():
-        print("    {}: {}".format(key, value))
+    filename = "./tuning/tuning_study.pkl"
+    with open(filename, "wb") as f:
+        pickle.dump(study, f)
+    print(f"Saved study '{study.study_name}' to pickle {filename}.")
