@@ -48,9 +48,17 @@ def load_data(path, number_patients=None, normalize=False, verbose=False):
     label = np.asarray(label)  # [[nr of subject, nr of scan],...]
     raw_features = np.asarray(raw_features)  # (nr_scans * nr_subjects) x (nr_voxels) x (length ts)
     raw_features = raw_features.transpose((0, 2, 1))
+    raw_features = torch.tensor(raw_features, dtype=torch.float)
+
+    print('stophere')
 
     if normalize:
-        raw_features = torch.nn.functional.normalize(torch.tensor(raw_features, dtype=torch.float), dim=1)
+        raw_means = torch.unsqueeze(torch.mean(raw_features, dim=1), dim=1)
+        raw_stds  = torch.unsqueeze(torch.std(raw_features, dim=1), dim=1)
+        raw_features = (raw_features - raw_means)/raw_stds
+
+        # Normalise the norm - this is probably undesirable
+        #raw_features = torch.nn.functional.normalize(raw_features, dim=1)
 
     # Create a matrix that will allow to query same or different pairs;
     # element (i,j) of the matrix = True if same subject and False if different subject
