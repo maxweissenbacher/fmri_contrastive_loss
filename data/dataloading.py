@@ -1,6 +1,7 @@
 import secrets
 
 import h5py
+import zarr
 import numpy as np
 import spatiotemporal
 from torch.utils.data import DataLoader, Dataset
@@ -36,13 +37,50 @@ def load_data(path, number_patients=None, normalize=False, verbose=False):
             ar1s = spatiotemporal.stats.temporal_autocorrelation(ts_np)
             var = np.var(tss[subj][scan], axis=0)
             var_norm = var / np.max(var)
-            all_features.append(np.concatenate([ar1s, var_norm]))
+            #all_features.append(np.concatenate([ar1s, var_norm]))  # Gives shape nr_scans x 720
+            all_features.append(np.vstack((ar1s, var_norm)))  # Give shape nr_scans x 2 x 360
             subjnum.append(i)
             scannum.append(j)
             label += [(i, j)]
 
+    print('stop here')
+
+    raw_features_2 = []
+    all_features_2 = []
+    subjnum_2 = []
+    scannum_2 = []
+    store = zarr.ZipStore('hcp1200.zarr.zip', mode='r')
+    data = zarr.group(store=store)['subjects']
+    subjects = list(data.keys())
+    timeseries = []
+    for i, s in enumerate(subjects):
+        if i > nr_subj: break
+        if not data[s]['functional/is_complete'][()]:
+            continue
+        tss = [data[s]['functional'][str(i + 1)]['timeseries']
+               for i in range(0, 4)]
+        for j in range(0, 4):
+            timeseries.append(data[s]['functional'][str(j + 1)]['timeseries'])
+            # extract variance and AR(1) coefficient (roughly 1st and 2nd term of ACF)
+            ts_np = np.asarray(data[s]['functional'][str(j + 1)]['timeseries']).T
+            ar1s = spatiotemporal.stats.temporal_autocorrelation(ts_np)
+            var = np.var(data[s]['functional'][str(j + 1)]['timeseries'], axis=0)
+            var_norm = var / np.max(var)
+            # all_features.append(np.concatenate([ar1s, var_norm]))  # Gives shape nr_scans x 720
+            all_features.append(np.vstack((ar1s, var_norm)))  # Give shape nr_scans x 2 x 360
+            scannum_2.append(j)
+        #timeseries.append(np.asarray(tss))
+
+        subjnum_2.append(i)
+    timeseries = np.asarray(timeseries)
+
+    print('stop here')
+
+
     # transform to arrays
-    all_features = np.asarray(all_features)  # (nr_scans * nr_subjects) x (nr_voxels * nr_features)
+    all_features = torch.tensor(np.asarray(all_features), dtype=torch.float)  # (nr_scans) x (nr_voxels * nr_features)
+    # Optional: swap the last two dimensions, so that output will have shape nr_scans x 360 x 2
+    all_features = torch.transpose(all_features, 2, 1)
     subjnum = np.asarray(subjnum)
     scannum = np.asarray(scannum)
     label = np.asarray(label)  # [[nr of subject, nr of scan],...]
@@ -50,11 +88,9 @@ def load_data(path, number_patients=None, normalize=False, verbose=False):
     raw_features = raw_features.transpose((0, 2, 1))
     raw_features = torch.tensor(raw_features, dtype=torch.float)
 
-    print('stophere')
-
     if normalize:
-        raw_means = torch.unsqueeze(torch.mean(raw_features, dim=1), dim=1)
-        raw_stds  = torch.unsqueeze(torch.std(raw_features, dim=1), dim=1)
+        raw_means = torch.mean(raw_features, dim=1, keepdim=True)
+        raw_stds = torch.std(raw_features, dim=1, keepdim=True)
         raw_features = (raw_features - raw_means)/raw_stds
 
         # Normalise the norm - this is probably undesirable
@@ -115,10 +151,12 @@ def train_test_split(data, perc, seed=None, verbose=False):
 
     d_train = {}
     d_train['raw'] = data['raw'][idxs_train, :]
+    d_train['autocorrelation_and_variation'] = data['autocorrelation_and_variation'][idxs_train, :]
     d_train['same_subject'] = data['same_subject'][idxs_train, :][:, idxs_train]
     d_train['diff_subject'] = data['diff_subject'][idxs_train, :][:, idxs_train]
     d_val = {}
     d_val['raw'] = data['raw'][idxs_val, :]
+    d_val['autocorrelation_and_variation'] = data['autocorrelation_and_variation'][idxs_val, :]
     d_val['same_subject'] = data['same_subject'][idxs_val, :][:, idxs_val]
     d_val['diff_subject'] = data['diff_subject'][idxs_val, :][:, idxs_val]
     d = {'train': d_train, 'val': d_val}
