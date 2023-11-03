@@ -58,15 +58,16 @@ def transformer_train(num_epochs, num_patients, batch_size, hpc=False):
     dataloader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True)
 
     # Hyperparameters
+    # Current values are tuned with initial hyperparameter tuning
     length = raw_features.shape[1]
     d_init = raw_features.shape[2]
-    d_model = 30  # 10
-    n_hidden = 15  # 10
+    d_model = 10  # 30
+    n_hidden = 20  # 15
     # d_model must be divisable by n_head
     n_head = 5  # 5
-    n_layers = 1
-    lr = 1e-1
-    eps = 3
+    n_layers = 2  # 1
+    lr = 1e-5
+    eps = 0.1  # 3.
 
     # Instantiate model, optimiser and learning rate scheduler
     model = VisionTransformer(length, d_init, d_model, n_hidden, n_head, n_layers, device)
@@ -91,8 +92,8 @@ def transformer_train(num_epochs, num_patients, batch_size, hpc=False):
         for (d, batch_idx) in dataloader_train:
             batch_idx = batch_idx.detach().numpy()
             # get submatrices of same and diff
-            same = torch.tensor(same_subject[batch_idx[:, None], batch_idx[None, :]]).to(device)
-            diff = torch.tensor(diff_subject[batch_idx[:, None], batch_idx[None, :]]).to(device)
+            same = torch.tensor(same_subject_train[batch_idx[:, None], batch_idx[None, :]]).to(device)
+            diff = torch.tensor(diff_subject_train[batch_idx[:, None], batch_idx[None, :]]).to(device)
             # pass through model
             output = model.forward(d)
             # Compute the loss value
