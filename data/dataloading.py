@@ -30,7 +30,7 @@ def load_data(path, format=None, number_patients=None, normalize=False, verbose=
         tss = f['timeseries'] # Subject timeseries, four sessions of 360 timeseries for each subject
         nr_subj = number_patients if number_patients is not None else len(tss.keys())
     elif format == 'zarr':
-        store = zarr.ZipStore('hcp1200.zarr.zip', mode='r')
+        store = zarr.ZipStore(path, mode='r')
         data = zarr.group(store=store)['subjects']
         subjects = list(data.keys())
         nr_subj = number_patients if number_patients is not None else len(subjects)
@@ -174,7 +174,8 @@ if __name__ == '__main__':
     # Some basic data exploration
     # Load data
     cwd = Path.cwd()  # Current working directory
-    rel_path = 'data/timeseries_max_all_subjects.hdf5'  # Relative path from project directory, depends on where you store the data
+    #rel_path = 'data/timeseries_max_all_subjects.hdf5'  # Relative path from project directory, depends on where you store the data
+    rel_path = 'data/hcp1200.zarr.zip'
     file_path = (cwd.parent / rel_path).resolve()
     data = load_data(file_path, format='zarr', number_patients=100, verbose=True)
 
