@@ -10,72 +10,79 @@ import time
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-def load_data(path, number_patients=None, normalize=False, verbose=False):
+def load_data(path, format=None, number_patients=None, normalize=False, verbose=False):
     """
     path points to wherever the dataset is (this depends on where the function is called from)
     number_patients is Int, number of patients to be loaded. If None, all patients are loaded
     """
     start_time = time.time()
-    # Load my dataset
-    f = h5py.File(path, "r")
-    tss = f['timeseries'] # Subject timeseries, four sessions of 360 timeseries for each subject
 
-    # Extract data
+    if format == 'HDF5':
+        print('Loading from HDF5 format.')
+    elif format == 'zarr':
+        print('Loading from zarr format.')
+    else:
+        raise NotImplementedError("Specify format to be either 'HDF5' or 'zarr'.")
+
+    # Load dataset
+    if format == 'HDF5':
+        f = h5py.File(path, "r")
+        tss = f['timeseries'] # Subject timeseries, four sessions of 360 timeseries for each subject
+        nr_subj = number_patients if number_patients is not None else len(tss.keys())
+    elif format == 'zarr':
+        store = zarr.ZipStore('hcp1200.zarr.zip', mode='r')
+        data = zarr.group(store=store)['subjects']
+        subjects = list(data.keys())
+        nr_subj = number_patients if number_patients is not None else len(subjects)
+
     raw_features = []
     all_features = []
     subjnum = []
     scannum = []
-    label = []
-    nr_subj = number_patients if number_patients is not None else len(tss.keys())
-    for i ,subj in enumerate(tss.keys()):
-        if i > nr_subj: break  # Just x subjects so that it runs faster
-        for j, scan in enumerate(tss[subj].keys()):  # 4 scans roughly per subject
-            # extract raw time series
-            ts_np = np.asarray(tss[subj][scan]).T  # 360 (=nr_voxels) x 1100
-            raw_features += [ts_np]
-            # extract variance and AR(1) coefficient (roughly 1st and 2nd term of ACF)
-            ar1s = spatiotemporal.stats.temporal_autocorrelation(ts_np)
-            var = np.var(tss[subj][scan], axis=0)
-            var_norm = var / np.max(var)
-            #all_features.append(np.concatenate([ar1s, var_norm]))  # Gives shape nr_scans x 720
-            all_features.append(np.vstack((ar1s, var_norm)))  # Give shape nr_scans x 2 x 360
-            subjnum.append(i)
-            scannum.append(j)
-            label += [(i, j)]
 
-    print('stop here')
-
-    raw_features_2 = []
-    all_features_2 = []
-    subjnum_2 = []
-    scannum_2 = []
-    store = zarr.ZipStore('hcp1200.zarr.zip', mode='r')
-    data = zarr.group(store=store)['subjects']
-    subjects = list(data.keys())
-    timeseries = []
-    for i, s in enumerate(subjects):
-        if i > nr_subj: break
-        if not data[s]['functional/is_complete'][()]:
-            continue
-        tss = [data[s]['functional'][str(i + 1)]['timeseries']
-               for i in range(0, 4)]
-        for j in range(0, 4):
-            timeseries.append(data[s]['functional'][str(j + 1)]['timeseries'])
-            # extract variance and AR(1) coefficient (roughly 1st and 2nd term of ACF)
-            ts_np = np.asarray(data[s]['functional'][str(j + 1)]['timeseries']).T
-            ar1s = spatiotemporal.stats.temporal_autocorrelation(ts_np)
-            var = np.var(data[s]['functional'][str(j + 1)]['timeseries'], axis=0)
-            var_norm = var / np.max(var)
-            # all_features.append(np.concatenate([ar1s, var_norm]))  # Gives shape nr_scans x 720
-            all_features.append(np.vstack((ar1s, var_norm)))  # Give shape nr_scans x 2 x 360
-            scannum_2.append(j)
-        #timeseries.append(np.asarray(tss))
-
-        subjnum_2.append(i)
-    timeseries = np.asarray(timeseries)
-
-    print('stop here')
-
+    # Extract data
+    if format == 'HDF5':
+        for i, subj in enumerate(tss.keys()):
+            if i > nr_subj:
+                break
+            for j, scan in enumerate(tss[subj].keys()):  # 4 scans roughly per subject
+                # extract raw time series
+                ts_np = np.asarray(tss[subj][scan]).T  # 360 (=nr_voxels) x 1100
+                raw_features += [ts_np]
+                # extract variance and AR(1) coefficient (roughly 1st and 2nd term of ACF)
+                ar1s = spatiotemporal.stats.temporal_autocorrelation(ts_np)
+                var = np.var(tss[subj][scan], axis=0)
+                var_norm = var / np.max(var)
+                #all_features.append(np.concatenate([ar1s, var_norm]))  # Gives shape nr_scans x 720
+                all_features.append(np.vstack((ar1s, var_norm)))  # Give shape nr_scans x 2 x 360
+                subjnum.append(i)
+                scannum.append(j)
+    elif format == 'zarr':
+        for i, s in enumerate(subjects):
+            if i > nr_subj:
+                break
+            if not data[s]['functional/is_complete'][()]:
+                err_string = f"Data for subject number {i} (id {s}) is incomplete"
+                for j in range(0, 4):
+                    try:
+                        ts_np = np.asarray(data[s]['functional'][str(j + 1)]['timeseries'])
+                        if not np.isfinite(ts_np).all():
+                            err_string += " | Found NaN"
+                    except KeyError:
+                        err_string += f" | missing scan {j+1}"
+                print(err_string)
+                continue
+            for j in range(0, 4):
+                # extract variance and AR(1) coefficient (roughly 1st and 2nd term of ACF)
+                ts_np = np.asarray(data[s]['functional'][str(j + 1)]['timeseries'])  # 360 x 1200
+                ar1s = spatiotemporal.stats.temporal_autocorrelation(ts_np)
+                var = np.var(ts_np.T, axis=0)
+                var_norm = var / np.max(var)
+                # all_features.append(np.concatenate([ar1s, var_norm]))  # Gives shape nr_scans x 720
+                all_features.append(np.vstack((ar1s, var_norm)))  # Give shape nr_scans x 2 x 360
+                raw_features.append(ts_np)
+                subjnum.append(i)
+                scannum.append(j)
 
     # transform to arrays
     all_features = torch.tensor(np.asarray(all_features), dtype=torch.float)  # (nr_scans) x (nr_voxels * nr_features)
@@ -83,7 +90,6 @@ def load_data(path, number_patients=None, normalize=False, verbose=False):
     all_features = torch.transpose(all_features, 2, 1)
     subjnum = np.asarray(subjnum)
     scannum = np.asarray(scannum)
-    label = np.asarray(label)  # [[nr of subject, nr of scan],...]
     raw_features = np.asarray(raw_features)  # (nr_scans * nr_subjects) x (nr_voxels) x (length ts)
     raw_features = raw_features.transpose((0, 2, 1))
     raw_features = torch.tensor(raw_features, dtype=torch.float)
@@ -170,7 +176,7 @@ if __name__ == '__main__':
     cwd = Path.cwd()  # Current working directory
     rel_path = 'data/timeseries_max_all_subjects.hdf5'  # Relative path from project directory, depends on where you store the data
     file_path = (cwd.parent / rel_path).resolve()
-    data = load_data(file_path, number_patients=100, verbose=True)
+    data = load_data(file_path, format='zarr', number_patients=100, verbose=True)
 
     print('here')
 
@@ -184,10 +190,11 @@ if __name__ == '__main__':
     # The distributions are all fairly similar
     num_patients = 20
     for patient_id in range(num_patients):
+        if len(np.where(data['subject_number'] == patient_id)[0]) == 0:
+            continue
         idx = np.where(data['subject_number'] == patient_id)[0][0]
         plt.hist(torch.linalg.norm(torch.tensor(x), dim=1)[idx, :], histtype='step', bins=15)
         #plt.title(f"Patient id {data['subject_number'][i]}")
     plt.legend([f"Patient id {i}" for i in range(num_patients)])
     plt.show()
-
 
