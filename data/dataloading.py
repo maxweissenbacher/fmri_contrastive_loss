@@ -70,7 +70,8 @@ def load_data(path, format=None, number_patients=None, normalize=False, verbose=
                             err_string += " | Found NaN"
                     except KeyError:
                         err_string += f" | missing scan {j+1}"
-                print(err_string)
+                if verbose:
+                    print(err_string)
                 continue
             for j in range(0, 4):
                 # extract variance and AR(1) coefficient (roughly 1st and 2nd term of ACF)
@@ -119,7 +120,7 @@ def load_data(path, format=None, number_patients=None, normalize=False, verbose=
 
     end_time = time.time()
     if verbose:
-        print(f'Data loading complete ({nr_subj} patients, {end_time - start_time:.2f}s.).')
+        print(f'Data loading complete ({all_features.shape[0]} scans, {end_time - start_time:.2f}s.).')
 
     return d
 

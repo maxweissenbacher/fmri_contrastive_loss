@@ -27,11 +27,17 @@ def transformer_train(num_epochs, num_patients, batch_size, hpc=False):
     print(f"Using device {device}")
 
     # Load data
+    file_format = 'zarr'  # or 'HDF5'
     cwd = Path.cwd()  # Current working directory
-    rel_path = 'data/timeseries_max_all_subjects.hdf5'  # Relative path from project directory, depends on where you store the data
+    if file_format == 'zarr':
+        rel_path = 'data/hcp1200.zarr.zip'
+    elif file_format == 'HDF5':
+        rel_path = 'data/timeseries_max_all_subjects.hdf5'
+    else:
+        raise NotImplementedError
     file_path = (cwd / rel_path).resolve()
     #file_path = (cwd.parent / rel_path).resolve()
-    data = load_data(file_path, number_patients=num_patients, normalize=True, verbose=True)
+    data = load_data(file_path, format=file_format, number_patients=num_patients, normalize=True, verbose=True)
 
     # data is a dict of numpy arrays, extract the relevant entries
     raw_features = data['raw']

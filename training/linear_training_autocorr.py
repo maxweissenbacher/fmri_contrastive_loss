@@ -1,7 +1,7 @@
 from data.dataloading import load_data, ourDataset, train_test_split
 from pathlib import Path
 import torch
-from models.vision_transformer import VisionTransformer
+import torch.nn as nn
 from torch.utils.data import DataLoader
 from models.losses.contrastive_losses import contr_loss_simple
 from tqdm import tqdm
@@ -13,19 +13,11 @@ from datetime import datetime
 from metrics.evaluation import compute_eval_metrics
 
 
-def transformer_train_autocorr(num_epochs, num_patients, batch_size, hpc=False, file_format="HDF5"):
+def linear_train_autocorr(num_epochs, num_patients, batch_size, hpc=False, file_format='HDF5'):
     time_run_started = datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    model_name = 'Transformer'
-
-    # Log the device that's being used
-    if hpc:
-        with open('./logs/device.txt', "w") as f:
-            f.write(str(device))
-
     print(f"Using device {device}")
+    model_name = "linear"
 
     # Load data
     cwd = Path.cwd()  # Current working directory
@@ -36,6 +28,7 @@ def transformer_train_autocorr(num_epochs, num_patients, batch_size, hpc=False, 
     else:
         raise NotImplementedError
     file_path = (cwd / rel_path).resolve()
+    # file_path = (cwd.parent / rel_path).resolve()
     data = load_data(file_path, format=file_format, number_patients=num_patients, normalize=True, verbose=True)
 
     # data is a dict of numpy arrays, extract the relevant entries
@@ -68,18 +61,13 @@ def transformer_train_autocorr(num_epochs, num_patients, batch_size, hpc=False, 
     print("here")
 
     # Hyperparameters
-    length = autocorr_features.shape[1]
-    d_init = autocorr_features.shape[2]
-    d_model = 45  # 10
-    n_hidden = 20  # 10
-    # d_model must be divisable by n_head
-    n_head = 5  # 5
-    n_layers = 3
+    in_dim = np.prod(autocorr_features_train.size()[-2:])  # 720 = 2 * 360
+    out_dim = 1
     lr = 1e-5
     eps = 0.1
 
     # Instantiate model, optimiser and learning rate scheduler
-    model = VisionTransformer(length, d_init, d_model, n_hidden, n_head, n_layers, device)
+    model = nn.Sequential(nn.Flatten(), nn.Linear(in_dim, out_dim)).to(device)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5)
 
@@ -148,11 +136,12 @@ def transformer_train_autocorr(num_epochs, num_patients, batch_size, hpc=False, 
     print(f"Training loop ({num_epochs} epochs) executed in {end_time-start_time:.2f}s, or {(end_time-start_time)/num_epochs:.2f}s per epoch.")
 
     # Save losses to txt file
-    filename = f"./logs/loss_autocorr_{time_run_started}.txt"
+    filename = f"./logs/loss_{model_name}_autocorr_{time_run_started}.txt"
     with open(filename, "w") as f:
         np.savetxt(f, np.array(losses))
 
-    filename = f"./logs/loss_autocorr_{time_run_started}.png"
+    filename = f"./logs/loss_{model_name}_autocorr_{time_run_started}.png"
+    # Plot losses and save to figure
     plt.plot(losses)
     plt.title('Losses (averaged over batches) by epoch')
     if hpc:
