@@ -20,3 +20,6 @@ class Net(nn.Module):
         x = self.sequential.forward(x)
         x = F.normalize(x, dim=-1)  # Normalise the output so it's contained on the sphere of dimension nenc
         return x
+
+    def __repr__(self):
+        return "neural_net"

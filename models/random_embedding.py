@@ -20,17 +20,16 @@ from pathlib import Path
 from data.dataloading import load_data, ourDataset
 
 
-class RandomFeatures(nn.Module):
-    def __init__(self, num_features):
+class RandomEmbedding(nn.Module):
+    def __init__(self, out_dim):
         super().__init__()
-        self.flatten = nn.Flatten()
-        self.inds = np.random.permutation(360 * 2) < num_features+1
+        self.out_dim = out_dim
 
     def forward(self, input):
-        x = self.flatten(input)  # equivalently, x = x.view(x.size()[0], -1)
-        x = x[..., self.inds]
+        batch_size = input.size()[0]
+        x = torch.normal(torch.zeros(batch_size, self.out_dim+1), 1.)
         x = F.normalize(x, dim=-1)
         return x
 
     def __repr__(self):
-        return "random_features"
+        return "random_embedding"

@@ -10,17 +10,19 @@ import time
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-def load_data(path, format=None, number_patients=None, normalize=False, verbose=False):
+def load_data(path, number_patients=None, normalize=False, verbose=False):
     """
     path points to wherever the dataset is (this depends on where the function is called from)
     number_patients is Int, number of patients to be loaded. If None, all patients are loaded
     """
     start_time = time.time()
 
-    if format == 'HDF5':
+    if str(path)[-4:] == 'hdf5':
         print('Loading from HDF5 format.')
-    elif format == 'zarr':
+        format = 'HDF5'
+    elif str(path)[-8:] == 'zarr.zip':
         print('Loading from zarr format.')
+        format = 'zarr'
     else:
         raise NotImplementedError("Specify format to be either 'HDF5' or 'zarr'.")
 

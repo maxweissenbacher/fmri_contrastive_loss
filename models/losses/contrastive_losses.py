@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-def contr_loss_simple(output, same, diff, eps, metric=None):
+def contr_loss_simple(output, same, diff, eps, alpha=1., metric=None):
     # note that when computing the gradient here, we thus need to iterate over all N^2 pairs (N is batchsize)
     if metric == 'euclidean':
         # Euclidean distance between embeddings
@@ -15,7 +15,7 @@ def contr_loss_simple(output, same, diff, eps, metric=None):
     loss_same = torch.mean(torch.pow(torch.masked_select(dist, same), 2))
     loss_diff = torch.mean(torch.pow(torch.clamp(eps - torch.masked_select(dist, diff), 0), 2))
     # return (loss_same + loss_diff)**2 / (dist.shape[0]*dist.shape[1])
-    return loss_same + loss_diff
+    return loss_same + alpha * loss_diff
 
 
 def contr_loss_lifted(output, same, diff, eps):

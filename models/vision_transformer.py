@@ -160,7 +160,7 @@ class OneLayer(nn.Module):
         return x
     
 class VisionTransformer(nn.Module):
-    def __init__(self, length, d_init, d_model, n_hidden, n_head, n_layers, device):
+    def __init__(self, length, d_init, d_model, n_hidden, n_head, n_layers, out_dim, device):
         super().__init__()
         self.linear1 = nn.Linear(d_init, d_model, device=device)  #maps initial dimension to d_model
         self.encoding = PositionalEncoding(length=length, d_model=d_model, device=device)
@@ -168,7 +168,7 @@ class VisionTransformer(nn.Module):
         for _ in range(n_layers):
             layer_list.append(OneLayer(d_model=d_model, n_hidden=n_hidden, n_head=n_head, device=device))
         self.layers = nn.ModuleList(layer_list)
-        self.linear2 = nn.Linear(d_model*length, 1, device=device)
+        self.linear2 = nn.Linear(d_model*length, out_dim+1, device=device)
 
     def forward(self, x):
         x = self.linear1(x)
@@ -181,8 +181,8 @@ class VisionTransformer(nn.Module):
         # Is this necessary? We want to just pick the first entry, like below!
         # One final linear layer over all dimensions
         x = torch.flatten(x, start_dim=1)
-        x = self.linear2(x)  # shape [batch_size, 1] ... the 1 is the FINAL embedding dimension of the model
-        # TO-DO: Normalise output? A final sigmoid layer does not seem to work...
+        x = self.linear2(x)  # shape [batch_size, out_dim+1]
+        x = F.normalize(x, dim=-1)
         return x
 
         # Previously, we had this:
@@ -194,6 +194,9 @@ class VisionTransformer(nn.Module):
         # at position zero, so it makes sense to keep looking at the first output. Can we do that?
         # Use whatever works at the end of the day... there is no real strong reason to prefer
         # any final layer architecture over another
+
+    def __repr__(self):
+        return "vision_transformer"
 
 if __name__=="__main__":
     # Load data

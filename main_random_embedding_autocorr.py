@@ -3,7 +3,7 @@ from pathlib import Path
 import torch
 from datetime import datetime
 from metrics.evaluation import compute_eval_metrics
-from models.random_features import RandomFeatures
+from models.random_embedding import RandomEmbedding
 
 
 if __name__ == '__main__':
@@ -18,7 +18,11 @@ if __name__ == '__main__':
 
     # Hyperparameters
     model_params = {
-        'num_features': 10,
+        'out_dim': 1,
+    }
+    loss_params = {
+        'eps': 0.1,
+        'alpha': 0.1,
     }
 
     print(f"Using device {device}")
@@ -38,7 +42,7 @@ if __name__ == '__main__':
     data_split = train_test_split(data, perc=.75, seed=251668716030294078557169461317962359616)
     del data
 
-    model = RandomFeatures(**model_params)
+    model = RandomEmbedding(**model_params)
 
     # Evaluating model performance
     compute_eval_metrics(
@@ -49,5 +53,5 @@ if __name__ == '__main__':
         metric='cosine',
     )
 
-    print('Finished executing.')
+print('Finished executing.')
 

@@ -4,23 +4,38 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
 import torch.nn as nn
+from data.dataloading import ourDataset, DataLoader
 
 
 def compute_eval_metrics(
-        dataloader_train,
-        same_subject_train,
-        diff_subject_train,
-        dataloader_val,
-        same_subject_val,
-        diff_subject_val,
-        model_name,
+        data,
         model,
+        device,
+        batch_size,
         threshold=0.1,
-        metric = None,
+        metric=None,
         normalise=False,  # Normalise output of model to [0,1]; only makes sense if output is 1D
 ):
+    print('Evaluating model performance...')
+
     if metric not in ['euclidean', 'cosine']:
         raise NotImplementedError("A metric must be chosen for the loss: either 'euclidean' or 'cosine'.")
+    if normalise and metric == 'cosine':
+        raise NotImplementedError("Using cosine similarity and normalising does not make sense.")
+
+    # Extract data, create dataloaders
+    same_subject_train = data['train']['same_subject']
+    same_subject_val = data['val']['same_subject']
+    diff_subject_train = data['train']['diff_subject']
+    diff_subject_val = data['val']['diff_subject']
+    autocorr_features_train = data['train']['autocorrelation_and_variation']
+    autocorr_features_val = data['val']['autocorrelation_and_variation']
+
+    # Convert to dataset and dataloader
+    dataset_train = ourDataset(autocorr_features_train, device=device)
+    dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
+    dataset_val = ourDataset(autocorr_features_val, device=device)
+    dataloader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True)
 
     # Evaluate model performance on training set
     output_train = []
@@ -43,18 +58,22 @@ def compute_eval_metrics(
     elif metric == 'cosine':
         # Cosine similarity between embeddings
         dist_train = nn.CosineSimilarity(dim=-1)(output_train[..., None, :, :], output_train[..., :, None, :])
+    dist_train = dist_train.detach().numpy()
     # get submatrices of same and diff
     same_train_true = same_subject_train[index_train[:, None], index_train[None, :]]
     diff_train_true = diff_subject_train[index_train[:, None], index_train[None, :]]
 
-    # Evaluation 1: we compute the accuracy of the same/diff classification
-    same_train_pred = (dist_train <= threshold)  # True if above threshold
-    diff_train_pred = (dist_train > threshold)
+    if metric == 'euclidean':
+        same_train_pred = (dist_train <= threshold)
+        diff_train_pred = (dist_train > threshold)
+    elif metric == 'cosine':
+        same_train_pred = (dist_train >= 1 - 2 * threshold)
+        diff_train_pred = (dist_train < 1 - 2 * threshold)
 
-    accuracy_same = np.sum((same_train_pred == same_train_true) & (same_train_true == True)) / np.sum(same_train_true)
-    accuracy_diff = np.sum((diff_train_true == diff_train_pred) & (diff_train_true == True)) / np.sum(diff_train_true)
-    print(f'Training set: accuracy on same: {accuracy_same:.4f}')
-    print(f'Training set: accuracy on different: {accuracy_diff:.4f}')
+    accuracy_same_train = np.sum((same_train_pred == same_train_true) & (same_train_true == True)) / np.sum(same_train_true)
+    accuracy_diff_train = np.sum((diff_train_true == diff_train_pred) & (diff_train_true == True)) / np.sum(diff_train_true)
+    print(f'Training set: accuracy on same: {accuracy_same_train:.4f}')
+    print(f'Training set: accuracy on different: {accuracy_diff_train:.4f}')
 
     # Evaluate model performance on testing set
     # Pass through model
@@ -78,18 +97,22 @@ def compute_eval_metrics(
     elif metric == 'cosine':
         # Cosine similarity between embeddings
         dist_val = nn.CosineSimilarity(dim=-1)(output_val[..., None, :, :], output_val[..., :, None, :])
+    dist_val = dist_val.detach().numpy()
     # get submatrices of same and diff
     same_val_true = same_subject_val[index_val[:, None], index_val[None, :]]
     diff_val_true = diff_subject_val[index_val[:, None], index_val[None, :]]
 
-    # Evaluation 1: we compute the accuracy of the same/diff classification
-    same_val_pred = (dist_val <= threshold)  # True if above threshold
-    diff_val_pred = (dist_val > threshold)
+    if metric == 'euclidean':
+        same_val_pred = (dist_val <= threshold)
+        diff_val_pred = (dist_val > threshold)
+    elif metric == 'cosine':
+        same_val_pred = (dist_val >= 1 - 2 * threshold)
+        diff_val_pred = (dist_val < 1 - 2 * threshold)
 
-    accuracy_same = np.sum((same_val_pred == same_val_true) & (same_val_true == True)) / np.sum(same_val_true)
-    accuracy_diff = np.sum((diff_val_true == diff_val_pred) & (diff_val_true == True)) / np.sum(diff_val_true)
-    print(f'Testing set:  accuracy on same: {accuracy_same:.4f}')
-    print(f'Testing set:  accuracy on different: {accuracy_diff:.4f}')
+    accuracy_same_val = np.sum((same_val_pred == same_val_true) & (same_val_true == True)) / np.sum(same_val_true)
+    accuracy_diff_val = np.sum((diff_val_true == diff_val_pred) & (diff_val_true == True)) / np.sum(diff_val_true)
+    print(f'Testing set:  accuracy on same: {accuracy_same_val:.4f}')
+    print(f'Testing set:  accuracy on different: {accuracy_diff_val:.4f}')
 
     # Make histograms for training and test set
     fig, axs = plt.subplots(1, 2)
@@ -102,9 +125,9 @@ def compute_eval_metrics(
     axs[0].set_xlabel(("Distance" if metric == 'euclidean' else "Cosine similarity") + " on validation data")
     axs[0].legend(["Same subject", "Different subject"])
     title = "Testing set\n"
-    title += f"diff of medians: {torch.median(sames) - torch.median(diffs):.2f}"
-    title += f" | diff of means: {torch.mean(sames) - torch.mean(diffs):.2f}\n"
-    title += f"acc on same: {accuracy_same:.4f} | acc on different: {accuracy_diff:.4f}"
+    title += f"diff of medians: {np.median(sames) - np.median(diffs):.2f}"
+    title += f" | diff of means: {np.mean(sames) - np.mean(diffs):.2f}\n"
+    title += f"acc on same: {accuracy_same_val:.4f} | acc on different: {accuracy_diff_val:.4f}"
     axs[0].set_title(title)
 
     # For training set
@@ -115,14 +138,14 @@ def compute_eval_metrics(
     axs[1].set_xlabel(("Distance" if metric == 'euclidean' else "Cosine similarity") + " on training data")
     axs[1].legend(["Same subject", "Different subject"])
     title = "Training set\n"
-    title += f"diff of medians: {torch.median(sames) - torch.median(diffs):.2f}"
-    title += f" | diff of means: {torch.mean(sames) - torch.mean(diffs):.2f}\n"
-    title += f"acc on same: {accuracy_same:.4f} | acc on different: {accuracy_diff:.4f}"
+    title += f"diff of medians: {np.median(sames) - np.median(diffs):.2f}"
+    title += f" | diff of means: {np.mean(sames) - np.mean(diffs):.2f}\n"
+    title += f"acc on same: {accuracy_same_train:.4f} | acc on different: {accuracy_diff_train:.4f}"
     axs[1].set_title(title)
 
     fig.set_size_inches(15, 7)
-    plt.suptitle(f"Histograms for {model_name} model")
-    plt.savefig(f'./figures/histogram_{model_name}_autocorr_combined.png', bbox_inches='tight')
+    plt.suptitle(f"Histograms for {str(model)} model")
+    plt.savefig(f'./figures/histogram_{str(model)}_autocorr_combined.png', bbox_inches='tight')
     plt.close()
 
     # Print estimated density of the output for training and testing set
@@ -131,5 +154,5 @@ def compute_eval_metrics(
     sns.kdeplot(data=output_val, ax=ax, palette=['red'], label='Validation')
     plt.title('Approximate density of model output')
     plt.legend()
-    plt.savefig(f'./figures/model_{model_name}_density_autocorr.png', bbox_inches='tight')
+    plt.savefig(f'./figures/model_{str(model)}_density_autocorr.png', bbox_inches='tight')
     plt.close()
