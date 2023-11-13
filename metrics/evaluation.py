@@ -15,6 +15,7 @@ def compute_eval_metrics(
         threshold=0.1,
         metric=None,
         normalise=False,  # Normalise output of model to [0,1]; only makes sense if output is 1D
+        create_figures=True,
 ):
     print('Evaluating model performance...')
 
@@ -49,12 +50,13 @@ def compute_eval_metrics(
 
     if normalise:
         # Normalise output to [0,1]
-        output_train = output_train - np.min(output_train)
-        output_train = output_train / np.max(output_train)
+        output_train = output_train - torch.min(output_train)
+        output_train = output_train / torch.max(output_train)
 
     if metric == 'euclidean':
         # Euclidean distance between embeddings
-        dist_train = torch.cdist(output_train, output_train, p=2)
+        #dist_train = torch.cdist(output_train, output_train, p=2)
+        dist_train = torch.cdist(output_train.view([-1, 1]), output_train.view([-1, 1]), p=2)
     elif metric == 'cosine':
         # Cosine similarity between embeddings
         dist_train = nn.CosineSimilarity(dim=-1)(output_train[..., None, :, :], output_train[..., :, None, :])
@@ -88,12 +90,13 @@ def compute_eval_metrics(
 
     if normalise:
         # Normalise output to [0,1]
-        output_val = output_val - np.min(output_val)
-        output_val = output_val / np.max(output_val)
+        output_val = output_val - torch.min(output_val)
+        output_val = output_val / torch.max(output_val)
 
     if metric == 'euclidean':
         # Euclidean distance between embeddings
-        dist_val = torch.cdist(output_val, output_val, p=2)
+        # dist_val = torch.cdist(output_val, output_val, p=2)
+        dist_val = torch.cdist(output_val.view([-1, 1]), output_val.view([-1, 1]), p=2)
     elif metric == 'cosine':
         # Cosine similarity between embeddings
         dist_val = nn.CosineSimilarity(dim=-1)(output_val[..., None, :, :], output_val[..., :, None, :])
@@ -114,45 +117,56 @@ def compute_eval_metrics(
     print(f'Testing set:  accuracy on same: {accuracy_same_val:.4f}')
     print(f'Testing set:  accuracy on different: {accuracy_diff_val:.4f}')
 
-    # Make histograms for training and test set
-    fig, axs = plt.subplots(1, 2)
+    if create_figures:
+        # Make histograms for training and test set
+        fig, axs = plt.subplots(1, 2)
 
-    # For testing set
-    sames = dist_val[same_val_true]
-    diffs = dist_val[diff_val_true]
-    axs[0].hist(sames, bins=100, density=True, alpha=.5)
-    axs[0].hist(diffs, bins=100, density=True, alpha=.5)
-    axs[0].set_xlabel(("Distance" if metric == 'euclidean' else "Cosine similarity") + " on validation data")
-    axs[0].legend(["Same subject", "Different subject"])
-    title = "Testing set\n"
-    title += f"diff of medians: {np.median(sames) - np.median(diffs):.2f}"
-    title += f" | diff of means: {np.mean(sames) - np.mean(diffs):.2f}\n"
-    title += f"acc on same: {accuracy_same_val:.4f} | acc on different: {accuracy_diff_val:.4f}"
-    axs[0].set_title(title)
+        # For testing set
+        sames = dist_val[same_val_true]
+        diffs = dist_val[diff_val_true]
+        axs[0].hist(sames, bins=100, density=True, alpha=.5)
+        axs[0].hist(diffs, bins=100, density=True, alpha=.5)
+        axs[0].set_xlabel(("Distance" if metric == 'euclidean' else "Cosine similarity") + " on validation data")
+        axs[0].legend(["Same subject", "Different subject"])
+        title = "Testing set\n"
+        title += f"diff of medians: {np.median(sames) - np.median(diffs):.2f}"
+        title += f" | diff of means: {np.mean(sames) - np.mean(diffs):.2f}\n"
+        title += f"acc on same: {accuracy_same_val:.4f} | acc on different: {accuracy_diff_val:.4f}"
+        axs[0].set_title(title)
 
-    # For training set
-    sames = dist_train[same_train_true]
-    diffs = dist_train[diff_train_true]
-    axs[1].hist(sames, bins=100, density=True, alpha=.5)
-    axs[1].hist(diffs, bins=100, density=True, alpha=.5)
-    axs[1].set_xlabel(("Distance" if metric == 'euclidean' else "Cosine similarity") + " on training data")
-    axs[1].legend(["Same subject", "Different subject"])
-    title = "Training set\n"
-    title += f"diff of medians: {np.median(sames) - np.median(diffs):.2f}"
-    title += f" | diff of means: {np.mean(sames) - np.mean(diffs):.2f}\n"
-    title += f"acc on same: {accuracy_same_train:.4f} | acc on different: {accuracy_diff_train:.4f}"
-    axs[1].set_title(title)
+        # For training set
+        sames = dist_train[same_train_true]
+        diffs = dist_train[diff_train_true]
+        axs[1].hist(sames, bins=100, density=True, alpha=.5)
+        axs[1].hist(diffs, bins=100, density=True, alpha=.5)
+        axs[1].set_xlabel(("Distance" if metric == 'euclidean' else "Cosine similarity") + " on training data")
+        axs[1].legend(["Same subject", "Different subject"])
+        title = "Training set\n"
+        title += f"diff of medians: {np.median(sames) - np.median(diffs):.2f}"
+        title += f" | diff of means: {np.mean(sames) - np.mean(diffs):.2f}\n"
+        title += f"acc on same: {accuracy_same_train:.4f} | acc on different: {accuracy_diff_train:.4f}"
+        axs[1].set_title(title)
 
-    fig.set_size_inches(15, 7)
-    plt.suptitle(f"Histograms for {str(model)} model")
-    plt.savefig(f'./figures/histogram_{str(model)}_autocorr_combined.png', bbox_inches='tight')
-    plt.close()
+        fig.set_size_inches(15, 7)
+        plt.suptitle(f"Histograms for {str(model)} model")
+        plt.savefig(f'./figures/histogram_{str(model)}_autocorr_combined.png', bbox_inches='tight')
+        plt.close()
 
-    # Print estimated density of the output for training and testing set
-    fig, ax = plt.subplots(1, 1)
-    sns.kdeplot(data=output_train, ax=ax, palette=['blue'], label='Training')
-    sns.kdeplot(data=output_val, ax=ax, palette=['red'], label='Validation')
-    plt.title('Approximate density of model output')
-    plt.legend()
-    plt.savefig(f'./figures/model_{str(model)}_density_autocorr.png', bbox_inches='tight')
-    plt.close()
+        # Print estimated density of the output for training and testing set
+        fig, ax = plt.subplots(1, 1)
+        sns.kdeplot(data=output_train, ax=ax, palette=['blue'], label='Training')
+        sns.kdeplot(data=output_val, ax=ax, palette=['red'], label='Validation')
+        plt.title('Approximate density of model output')
+        plt.legend()
+        plt.savefig(f'./figures/model_{str(model)}_density_autocorr.png', bbox_inches='tight')
+        plt.close()
+
+    return_dict = {
+        'acc_same_train': accuracy_same_train,
+        'acc_diff_train': accuracy_diff_train,
+        'acc_same_val': accuracy_same_val,
+        'acc_diff_val': accuracy_diff_val,
+    }
+
+    return return_dict
+
