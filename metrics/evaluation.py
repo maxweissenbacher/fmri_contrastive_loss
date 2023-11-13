@@ -5,6 +5,7 @@ import seaborn as sns
 import torch
 import torch.nn as nn
 from data.dataloading import ourDataset, DataLoader
+from metrics.icc import icc_full
 
 
 def compute_eval_metrics(
@@ -47,6 +48,7 @@ def compute_eval_metrics(
         index_train.append(batch_idx.detach().cpu())
     output_train = torch.vstack(output_train)
     index_train = torch.hstack(index_train)
+    subject_number_train = data['train']['subject_number'][index_train]
 
     if normalise:
         # Normalise output to [0,1]
@@ -74,8 +76,26 @@ def compute_eval_metrics(
 
     accuracy_same_train = np.sum((same_train_pred == same_train_true) & (same_train_true == True)) / np.sum(same_train_true)
     accuracy_diff_train = np.sum((diff_train_true == diff_train_pred) & (diff_train_true == True)) / np.sum(diff_train_true)
+
+    # Compute intra-rater reliability (ICC)
+    if metric == 'euclidean':
+        values = output_train.detach().cpu().numpy()
+        icc_train = icc_full(subject_number_train, values)[0]
+    elif metric == 'cosine':
+        # Here we have a problem: ICC is only defined for one-dimensional ratings
+        # However, our model output is at least two dimensional (i.e. a point on some hypersphere).
+        # Therefore, we cheat a little bit and compute the ICC of each dimension of the model output separately
+        # and then average over the dimensions... this is likely not a very smart thing to do but hey.
+        icc_average = 0.
+        for i in range(output_train.shape[-1]):
+            values = output_train[:, i].detach().cpu().numpy()
+            icc_average += icc_full(subject_number_train, values)[0]
+        icc_average /= output_train.shape[-1]
+        icc_train = icc_average
+
     print(f'Training set: accuracy on same: {accuracy_same_train:.4f}')
     print(f'Training set: accuracy on different: {accuracy_diff_train:.4f}')
+    print(f'Training set: ICC {icc_train:.2f}')
 
     # Evaluate model performance on testing set
     # Pass through model
@@ -87,6 +107,7 @@ def compute_eval_metrics(
         index_val.append(batch_idx.detach().cpu())
     output_val = torch.vstack(output_val)
     index_val = torch.hstack(index_val)
+    subject_number_val = data['val']['subject_number'][index_val]
 
     if normalise:
         # Normalise output to [0,1]
@@ -114,8 +135,26 @@ def compute_eval_metrics(
 
     accuracy_same_val = np.sum((same_val_pred == same_val_true) & (same_val_true == True)) / np.sum(same_val_true)
     accuracy_diff_val = np.sum((diff_val_true == diff_val_pred) & (diff_val_true == True)) / np.sum(diff_val_true)
+
+    # Compute intra-rater reliability (ICC)
+    if metric == 'euclidean':
+        values = output_val.detach().cpu().numpy()
+        icc_val = icc_full(subject_number_val, values)[0]
+    elif metric == 'cosine':
+        # Here we have a problem: ICC is only defined for one-dimensional ratings
+        # However, our model output is at least two dimensional (i.e. a point on some hypersphere).
+        # Therefore, we cheat a little bit and compute the ICC of each dimension of the model output separately
+        # and then average over the dimensions... this is likely not a very smart thing to do but hey.
+        icc_average = 0.
+        for i in range(output_val.shape[-1]):
+            values = output_val[:, i].detach().cpu().numpy()
+            icc_average += icc_full(subject_number_val, values)[0]
+        icc_average /= output_val.shape[-1]
+        icc_val = icc_average
+
     print(f'Testing set:  accuracy on same: {accuracy_same_val:.4f}')
     print(f'Testing set:  accuracy on different: {accuracy_diff_val:.4f}')
+    print(f'Testing set: ICC {icc_val:.2f}')
 
     if create_figures:
         # Make histograms for training and test set
@@ -131,7 +170,8 @@ def compute_eval_metrics(
         title = "Testing set\n"
         title += f"diff of medians: {np.median(sames) - np.median(diffs):.2f}"
         title += f" | diff of means: {np.mean(sames) - np.mean(diffs):.2f}\n"
-        title += f"acc on same: {accuracy_same_val:.4f} | acc on different: {accuracy_diff_val:.4f}"
+        title += f"acc on same: {accuracy_same_val:.4f} | acc on different: {accuracy_diff_val:.4f}\n"
+        title += f"ICC {icc_val:.2f}"
         axs[0].set_title(title)
 
         # For training set
@@ -144,11 +184,12 @@ def compute_eval_metrics(
         title = "Training set\n"
         title += f"diff of medians: {np.median(sames) - np.median(diffs):.2f}"
         title += f" | diff of means: {np.mean(sames) - np.mean(diffs):.2f}\n"
-        title += f"acc on same: {accuracy_same_train:.4f} | acc on different: {accuracy_diff_train:.4f}"
+        title += f"acc on same: {accuracy_same_train:.4f} | acc on different: {accuracy_diff_train:.4f}\n"
+        title += f"ICC {icc_train:.2f}"
         axs[1].set_title(title)
 
         fig.set_size_inches(15, 7)
-        plt.suptitle(f"Histograms for {str(model)} model")
+        plt.suptitle(f"{str(model)} model")
         plt.savefig(f'./figures/histogram_{str(model)}_autocorr_combined.png', bbox_inches='tight')
         plt.close()
 

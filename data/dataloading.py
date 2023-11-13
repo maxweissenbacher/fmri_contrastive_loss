@@ -112,13 +112,14 @@ def load_data(path, number_patients=None, normalize=False, verbose=False):
     # element (i,j) of the matrix = True if different subjects and False if same
     diff_subject = (subjnum[:, None] != subjnum[None, :])
 
-    d = {'raw': raw_features,
+    d = {
+        'raw': raw_features,
          'autocorrelation_and_variation': all_features,
          'subject_number': subjnum,
          'scan_number': scannum,
          'same_subject': same_subject,
          'diff_subject': diff_subject
-         }
+    }
 
     end_time = time.time()
     if verbose:
@@ -163,11 +164,17 @@ def train_test_split(data, perc, seed=None, verbose=False):
     d_train['autocorrelation_and_variation'] = data['autocorrelation_and_variation'][idxs_train, :]
     d_train['same_subject'] = data['same_subject'][idxs_train, :][:, idxs_train]
     d_train['diff_subject'] = data['diff_subject'][idxs_train, :][:, idxs_train]
+    d_train['subject_number'] = data['subject_number'][idxs_train]
+    d_train['scan_number'] = data['scan_number'][idxs_train]
+
     d_val = {}
     d_val['raw'] = data['raw'][idxs_val, :]
     d_val['autocorrelation_and_variation'] = data['autocorrelation_and_variation'][idxs_val, :]
     d_val['same_subject'] = data['same_subject'][idxs_val, :][:, idxs_val]
     d_val['diff_subject'] = data['diff_subject'][idxs_val, :][:, idxs_val]
+    d_val['subject_number'] = data['subject_number'][idxs_val]
+    d_val['scan_number'] = data['scan_number'][idxs_val]
+
     d = {'train': d_train, 'val': d_val}
 
     return d
@@ -180,7 +187,7 @@ if __name__ == '__main__':
     #rel_path = 'data/timeseries_max_all_subjects.hdf5'  # Relative path from project directory, depends on where you store the data
     rel_path = 'data/hcp1200.zarr.zip'
     file_path = (cwd.parent / rel_path).resolve()
-    data = load_data(file_path, format='zarr', number_patients=100, verbose=True)
+    data = load_data(file_path, number_patients=100, verbose=True)
 
     print('here')
 
