@@ -10,6 +10,7 @@ def contr_loss_simple(output, same, diff, eps, alpha=1., metric=None):
     elif metric == 'cosine':
         # Cosine similarity between embeddings
         dist = nn.CosineSimilarity(dim=-1)(output[..., None, :, :], output[..., :, None, :])
+        dist = 1 - dist
     else:
         raise NotImplementedError("A metric must be chosen for the loss: either 'euclidean' or 'cosine'.")
     loss_same = torch.mean(torch.pow(torch.masked_select(dist, same), 2))
