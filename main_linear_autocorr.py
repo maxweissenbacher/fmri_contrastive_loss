@@ -16,17 +16,17 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch_size = 512
     num_patients = None
-    num_epochs = 1500
+    num_epochs = 2000
     file_format = 'zarr'
 
     # Hyperparameters
     model_params = {
         'in_dim': 720,  # = 2 * 360
-        'out_dim': 1,
+        'out_dim': 10,
     }
     loss_params = {
-        'eps': 0.1,
-        'alpha': 0.1,
+        'eps': 1.4,
+        'alpha': 0.8,
     }
 
     print(f"Using device {device}")

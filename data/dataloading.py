@@ -81,8 +81,10 @@ def load_data(path, number_patients=None, normalize=False, verbose=False):
                 ar1s = spatiotemporal.stats.temporal_autocorrelation(ts_np)
                 var = np.var(ts_np.T, axis=0)
                 var_norm = var / np.max(var)
-                # all_features.append(np.concatenate([ar1s, var_norm]))  # Gives shape nr_scans x 720
-                all_features.append(np.vstack((ar1s, var_norm)))  # Give shape nr_scans x 2 x 360
+                #all_features.append(np.vstack((ar1s, var_norm)))  # Give shape nr_scans x 2 x 360
+                # Use only AR1:
+                all_features.append(np.vstack((ar1s)))  # Give shape nr_scans x 1 x 360
+
                 raw_features.append(ts_np)
                 subjnum.append(i)
                 scannum.append(j)

@@ -79,7 +79,7 @@ def compute_eval_metrics(
 
     # Compute intra-rater reliability (ICC)
     if metric == 'euclidean':
-        values = output_train.detach().cpu().numpy()
+        values = np.ndarray.flatten(output_train.detach().cpu().numpy())
         icc_train = icc_full(subject_number_train, values)[0]
     elif metric == 'cosine':
         # Here we have a problem: ICC is only defined for one-dimensional ratings
@@ -138,7 +138,7 @@ def compute_eval_metrics(
 
     # Compute intra-rater reliability (ICC)
     if metric == 'euclidean':
-        values = output_val.detach().cpu().numpy()
+        values = np.ndarray.flatten(output_val.detach().cpu().numpy())
         icc_val = icc_full(subject_number_val, values)[0]
     elif metric == 'cosine':
         # Here we have a problem: ICC is only defined for one-dimensional ratings
@@ -207,6 +207,8 @@ def compute_eval_metrics(
         'acc_diff_train': accuracy_diff_train,
         'acc_same_val': accuracy_same_val,
         'acc_diff_val': accuracy_diff_val,
+        'icc_train': icc_train,
+        'icc_val': icc_val,
     }
 
     return return_dict

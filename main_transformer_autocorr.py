@@ -15,7 +15,7 @@ if __name__ == '__main__':
     # Training parameters
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch_size = 512
-    num_patients = None
+    num_patients = 100
     num_epochs = 1500
     file_format = 'zarr'
 
@@ -48,7 +48,7 @@ if __name__ == '__main__':
     }
     loss_params = {
         'eps': 0.1,
-        'alpha': 0.1,
+        'alpha': 100.,
     }
 
     del data
@@ -60,7 +60,7 @@ if __name__ == '__main__':
         loss_params=loss_params,
         data=data_split['train'],
         device=device,
-        lr=1e-5,
+        lr=1.,
         batch_size=batch_size,
     )
     losses = trainer.train(num_epochs)

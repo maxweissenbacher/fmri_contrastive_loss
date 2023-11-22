@@ -50,6 +50,7 @@ class Trainer:
                 diff = torch.tensor(self.diff_subject[batch_idx[:, None], batch_idx[None, :]]).to(self.device)
                 output = self.model.forward(d)
                 loss = contr_loss_simple(output, same, diff, self.eps, self.alpha, metric='cosine')
+
                 self.optimizer.zero_grad()
                 loss.backward()
                 gn = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 100.)

@@ -13,7 +13,6 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch_size = 512
     num_patients = None
-    num_epochs = 1500
     file_format = 'zarr'
 
     # Hyperparameters

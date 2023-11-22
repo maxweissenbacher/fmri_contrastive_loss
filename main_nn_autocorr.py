@@ -15,20 +15,20 @@ if __name__ == '__main__':
     # Training parameters
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch_size = 512
-    num_patients = None
-    num_epochs = 1500
+    num_patients = 100
+    num_epochs = 2000
     file_format = 'zarr'
 
     # Hyperparameters
     model_params = {
-        'dim': 720,  # = 2 * 360
+        'dim': 360,  # = 2 * 360
         'width': 64,
         'depth': 2,
         'nenc': 1,
     }
     loss_params = {
-        'eps': 0.1,
-        'alpha': 0.1,
+        'eps': 1.4,
+        'alpha': 0.8,
     }
 
     print(f"Using device {device}")
@@ -77,7 +77,7 @@ if __name__ == '__main__':
         model=trainer.model,
         device=device,
         batch_size=batch_size,
-        metric='cosine',
+        metric='euclidean',
     )
 
 print('Finished executing.')

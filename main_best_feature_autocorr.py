@@ -12,14 +12,8 @@ if __name__ == '__main__':
     # Training parameters
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch_size = 512
-    num_patients = 100
-    num_epochs = 1500
+    num_patients = None
     file_format = 'zarr'
-
-    # Hyperparameters
-    model_params = {
-        'num_features': 10,
-    }
 
     print(f"Using device {device}")
 
@@ -47,7 +41,7 @@ if __name__ == '__main__':
         def forward(self, input):
             x = self.flatten(input)  # equivalently, x = x.view(x.size()[0], -1)
             x = x[..., self.idx]
-            return x
+            return x.view(-1, 1)
 
         def __repr__(self):
             return f"one_feature_idx_{self.idx}"
@@ -65,11 +59,12 @@ if __name__ == '__main__':
             normalise=True,
             create_figures=False,
         )
+        # Finding the index that gives maximal recall on validation data for different subjects
         if metrics['acc_diff_val'] > max_acc:
             max_acc = metrics['acc_diff_val']
             best_idx = i
 
-    print(f"Best feature index is {best_idx}.")
+    print(f"Best feature (maximal recall on different subjects on validation set) index is {best_idx}.")
 
     model = OneFeature(idx=best_idx)
     metrics = compute_eval_metrics(
