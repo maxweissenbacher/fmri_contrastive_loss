@@ -105,7 +105,7 @@ def load_data(path, number_patients=None, normalize=False, verbose=False, load_r
                     raw_features.append(ts_np)
                 subjnum.append(i)
                 scannum.append(j)
-                label.append((i,j))
+                label.append((i, j))
 
     # transform to arrays
     all_features = torch.tensor(np.asarray(all_features), dtype=torch.float)  # (nr_scans) x (nr_voxels * nr_features)
@@ -114,7 +114,7 @@ def load_data(path, number_patients=None, normalize=False, verbose=False, load_r
     feature_bank = np.asarray(feature_bank)
     subjnum = np.asarray(subjnum)
     scannum = np.asarray(scannum)
-    label = np.asarray(label)
+    label = torch.tensor(np.asarray(label), dtype=torch.float)
     if load_raw_data:
         raw_features = np.asarray(raw_features)  # (nr_scans * nr_subjects) x (nr_voxels) x (length ts)
         raw_features = raw_features.transpose((0, 2, 1))
@@ -136,9 +136,7 @@ def load_data(path, number_patients=None, normalize=False, verbose=False, load_r
         'autocorrelation_and_variation': all_features,
         'feature_bank': feature_bank,
         'subject_number': subjnum,
-        'scan_number': scannum,
-        'same_subject': same_subject,
-        'diff_subject': diff_subject
+        'label': label,
     }
 
     end_time = time.time()
