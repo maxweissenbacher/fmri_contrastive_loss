@@ -9,8 +9,9 @@ import torch
 import time
 from pathlib import Path
 import matplotlib.pyplot as plt
+import scipy
 
-def load_data(path, number_patients=None, normalize=False, verbose=False):
+def load_data(path, number_patients=None, normalize=False, verbose=False, load_raw_data=True):
     """
     path points to wherever the dataset is (this depends on where the function is called from)
     number_patients is Int, number of patients to be loaded. If None, all patients are loaded
@@ -39,8 +40,10 @@ def load_data(path, number_patients=None, normalize=False, verbose=False):
 
     raw_features = []
     all_features = []
+    feature_bank = []
     subjnum = []
     scannum = []
+    label = []
 
     # Extract data
     if format == 'HDF5':
@@ -50,11 +53,15 @@ def load_data(path, number_patients=None, normalize=False, verbose=False):
             for j, scan in enumerate(tss[subj].keys()):  # 4 scans roughly per subject
                 # extract raw time series
                 ts_np = np.asarray(tss[subj][scan]).T  # 360 (=nr_voxels) x 1100
-                raw_features += [ts_np]
+                if load_raw_data:
+                    raw_features += [ts_np]
                 # extract variance and AR(1) coefficient (roughly 1st and 2nd term of ACF)
                 ar1s = spatiotemporal.stats.temporal_autocorrelation(ts_np)
-                var = np.var(tss[subj][scan], axis=0)
-                var_norm = var / np.max(var)
+                var = np.var(ts_np, axis=1)
+                # var_norm = var / np.max(var)
+                mean = np.mean(ts_np, axis=1)
+                std = np.std(ts_np, axis=1)
+                skew = scipy.stats.skew(ts_np, axis=1)
                 #all_features.append(np.concatenate([ar1s, var_norm]))  # Gives shape nr_scans x 720
                 all_features.append(np.vstack((ar1s, var_norm)))  # Give shape nr_scans x 2 x 360
                 subjnum.append(i)
@@ -79,33 +86,43 @@ def load_data(path, number_patients=None, normalize=False, verbose=False):
                 # extract variance and AR(1) coefficient (roughly 1st and 2nd term of ACF)
                 ts_np = np.asarray(data[s]['functional'][str(j + 1)]['timeseries'])  # 360 x 1200
                 ar1s = spatiotemporal.stats.temporal_autocorrelation(ts_np)
-                var = np.var(ts_np.T, axis=0)
+                var = np.var(ts_np, axis=1)
                 var_norm = var / np.max(var)
+                mean = np.mean(ts_np, axis=1)
+                std = np.std(ts_np, axis=1)
+                skew = scipy.stats.skew(ts_np, axis=1)
+                kurt = scipy.stats.kurtosis(ts_np, axis=1)
+                ars = []
+                for k in range(1, 10):
+                    ars.append(
+                        np.asarray([np.corrcoef(ts_np[i, k:], ts_np[i, :-k])[0, 1] for i in range(0, len(ts_np))]))
+                features = np.concatenate([[mean, var, std, skew, kurt], ars])
+                feature_bank.append(features)
                 #all_features.append(np.vstack((ar1s, var_norm)))  # Give shape nr_scans x 2 x 360
                 # Use only AR1:
                 all_features.append(np.vstack((ar1s)))  # Give shape nr_scans x 1 x 360
-
-                raw_features.append(ts_np)
+                if load_raw_data:
+                    raw_features.append(ts_np)
                 subjnum.append(i)
                 scannum.append(j)
+                label.append((i,j))
 
     # transform to arrays
     all_features = torch.tensor(np.asarray(all_features), dtype=torch.float)  # (nr_scans) x (nr_voxels * nr_features)
     # Optional: swap the last two dimensions, so that output will have shape nr_scans x 360 x 2
     all_features = torch.transpose(all_features, 2, 1)
+    feature_bank = np.asarray(feature_bank)
     subjnum = np.asarray(subjnum)
     scannum = np.asarray(scannum)
-    raw_features = np.asarray(raw_features)  # (nr_scans * nr_subjects) x (nr_voxels) x (length ts)
-    raw_features = raw_features.transpose((0, 2, 1))
-    raw_features = torch.tensor(raw_features, dtype=torch.float)
-
+    label = np.asarray(label)
+    if load_raw_data:
+        raw_features = np.asarray(raw_features)  # (nr_scans * nr_subjects) x (nr_voxels) x (length ts)
+        raw_features = raw_features.transpose((0, 2, 1))
+        raw_features = torch.tensor(raw_features, dtype=torch.float)
     if normalize:
         raw_means = torch.mean(raw_features, dim=1, keepdim=True)
         raw_stds = torch.std(raw_features, dim=1, keepdim=True)
         raw_features = (raw_features - raw_means)/raw_stds
-
-        # Normalise the norm - this is probably undesirable
-        #raw_features = torch.nn.functional.normalize(raw_features, dim=1)
 
     # Create a matrix that will allow to query same or different pairs;
     # element (i,j) of the matrix = True if same subject and False if different subject
@@ -116,11 +133,12 @@ def load_data(path, number_patients=None, normalize=False, verbose=False):
 
     d = {
         'raw': raw_features,
-         'autocorrelation_and_variation': all_features,
-         'subject_number': subjnum,
-         'scan_number': scannum,
-         'same_subject': same_subject,
-         'diff_subject': diff_subject
+        'autocorrelation_and_variation': all_features,
+        'feature_bank': feature_bank,
+        'subject_number': subjnum,
+        'scan_number': scannum,
+        'same_subject': same_subject,
+        'diff_subject': diff_subject
     }
 
     end_time = time.time()
@@ -162,20 +180,14 @@ def train_test_split(data, perc, seed=None, verbose=False):
         print(f"Total number of scans = {data['raw'].shape[0]}, num of scans in training set = {idxs_train.sum()}, num of scans in testing set = {idxs_val.sum()}.")
 
     d_train = {}
-    d_train['raw'] = data['raw'][idxs_train, :]
-    d_train['autocorrelation_and_variation'] = data['autocorrelation_and_variation'][idxs_train, :]
-    d_train['same_subject'] = data['same_subject'][idxs_train, :][:, idxs_train]
-    d_train['diff_subject'] = data['diff_subject'][idxs_train, :][:, idxs_train]
-    d_train['subject_number'] = data['subject_number'][idxs_train]
-    d_train['scan_number'] = data['scan_number'][idxs_train]
-
     d_val = {}
-    d_val['raw'] = data['raw'][idxs_val, :]
-    d_val['autocorrelation_and_variation'] = data['autocorrelation_and_variation'][idxs_val, :]
-    d_val['same_subject'] = data['same_subject'][idxs_val, :][:, idxs_val]
-    d_val['diff_subject'] = data['diff_subject'][idxs_val, :][:, idxs_val]
-    d_val['subject_number'] = data['subject_number'][idxs_val]
-    d_val['scan_number'] = data['scan_number'][idxs_val]
+    for key in data.keys():
+        if key in ['same_subject', 'diff_subject']:
+            d_train[key] = data[key][idxs_train, :][:, idxs_train]
+            d_val[key] = data[key][idxs_val, :][:, idxs_val]
+        else:
+            d_train[key] = data[key][idxs_train]
+            d_val[key] = data[key][idxs_val]
 
     d = {'train': d_train, 'val': d_val}
 
@@ -189,7 +201,7 @@ if __name__ == '__main__':
     #rel_path = 'data/timeseries_max_all_subjects.hdf5'  # Relative path from project directory, depends on where you store the data
     rel_path = 'data/hcp1200.zarr.zip'
     file_path = (cwd.parent / rel_path).resolve()
-    data = load_data(file_path, number_patients=100, verbose=True)
+    data = load_data(file_path, number_patients=100, verbose=True, load_raw_data=False)
 
     print('here')
 
@@ -210,4 +222,5 @@ if __name__ == '__main__':
         #plt.title(f"Patient id {data['subject_number'][i]}")
     plt.legend([f"Patient id {i}" for i in range(num_patients)])
     plt.show()
+
 
