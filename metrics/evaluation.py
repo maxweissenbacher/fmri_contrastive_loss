@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from data.dataloading import ourDataset, DataLoader
 from metrics.icc import icc_full
+from utils.utils import compute_same_diff_from_label
 
 
 def compute_eval_metrics(
@@ -26,17 +27,17 @@ def compute_eval_metrics(
         raise NotImplementedError("Using cosine similarity and normalising does not make sense.")
 
     # Extract data, create dataloaders
-    same_subject_train = data['train']['same_subject']
-    same_subject_val = data['val']['same_subject']
-    diff_subject_train = data['train']['diff_subject']
-    diff_subject_val = data['val']['diff_subject']
-    autocorr_features_train = data['train']['autocorrelation_and_variation']
-    autocorr_features_val = data['val']['autocorrelation_and_variation']
+    label_train = data['train']['label']
+    label_val = data['val']['label']
+    same_subject_train, diff_subject_train = compute_same_diff_from_label(label_train, label_train)
+    same_subject_val, diff_subject_val = compute_same_diff_from_label(label_val, label_val)
+    features_train = data['train']['autocorrelation_and_variation']
+    features_val = data['val']['autocorrelation_and_variation']
 
     # Convert to dataset and dataloader
-    dataset_train = ourDataset(autocorr_features_train, device=device)
+    dataset_train = ourDataset(features_train, device=device)
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
-    dataset_val = ourDataset(autocorr_features_val, device=device)
+    dataset_val = ourDataset(features_val, device=device)
     dataloader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True)
 
     # Evaluate model performance on training set
@@ -74,8 +75,8 @@ def compute_eval_metrics(
         same_train_pred = (dist_train >= 1 - 2 * threshold)
         diff_train_pred = (dist_train < 1 - 2 * threshold)
 
-    accuracy_same_train = np.sum((same_train_pred == same_train_true) & (same_train_true == True)) / np.sum(same_train_true)
-    accuracy_diff_train = np.sum((diff_train_true == diff_train_pred) & (diff_train_true == True)) / np.sum(diff_train_true)
+    accuracy_same_train = torch.sum((same_train_pred == same_train_true) & (same_train_true == True)) / torch.sum(same_train_true)
+    accuracy_diff_train = torch.sum((diff_train_true == diff_train_pred) & (diff_train_true == True)) / torch.sum(diff_train_true)
 
     # Compute intra-rater reliability (ICC)
     if metric == 'euclidean':
@@ -133,8 +134,8 @@ def compute_eval_metrics(
         same_val_pred = (dist_val >= 1 - 2 * threshold)
         diff_val_pred = (dist_val < 1 - 2 * threshold)
 
-    accuracy_same_val = np.sum((same_val_pred == same_val_true) & (same_val_true == True)) / np.sum(same_val_true)
-    accuracy_diff_val = np.sum((diff_val_true == diff_val_pred) & (diff_val_true == True)) / np.sum(diff_val_true)
+    accuracy_same_val = torch.sum((same_val_pred == same_val_true) & (same_val_true == True)) / torch.sum(same_val_true)
+    accuracy_diff_val = torch.sum((diff_val_true == diff_val_pred) & (diff_val_true == True)) / torch.sum(diff_val_true)
 
     # Compute intra-rater reliability (ICC)
     if metric == 'euclidean':
