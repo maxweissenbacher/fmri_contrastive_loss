@@ -13,8 +13,7 @@ class Trainer:
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=lr)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.5)
         # Load data
-        self.same_subject = data['same_subject']
-        self.diff_subject = data['diff_subject']
+        self.label = data['label']
         self.features = data['autocorrelation_and_variation']
         # Convert to dataset and dataloader
         dataset = ourDataset(self.features, device=device)
@@ -42,15 +41,12 @@ class Trainer:
             # iterate over all data
             for (d, batch_idx) in self.dataloader:
                 batch_idx = batch_idx.detach().numpy()
-                # get submatrices of same and diff
                 # ----------
                 # TO-DO: Check if using the same_subject matrix as opposed to the same_subject_train matrix is correct!
                 # ----------
-                same = torch.tensor(self.same_subject[batch_idx[:, None], batch_idx[None, :]]).to(self.device)
-                diff = torch.tensor(self.diff_subject[batch_idx[:, None], batch_idx[None, :]]).to(self.device)
+                label = self.label[batch_idx]
                 output = self.model.forward(d)
-                loss = contr_loss_simple(output, same, diff, self.eps, self.alpha, metric='cosine')
-
+                loss = contr_loss_simple(output, label, output, label, self.eps, self.alpha, metric='euclidean')
                 self.optimizer.zero_grad()
                 loss.backward()
                 gn = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 100.)
