@@ -18,6 +18,7 @@ def compute_eval_metrics(
         metric=None,
         normalise=False,  # Normalise output of model to [0,1]; only makes sense if output is 1D
         create_figures=True,
+        feature_name=None,
 ):
     print('Evaluating model performance...')
 
@@ -25,6 +26,8 @@ def compute_eval_metrics(
         raise NotImplementedError("A metric must be chosen for the loss: either 'euclidean' or 'cosine'.")
     if normalise and metric == 'cosine':
         raise NotImplementedError("Using cosine similarity and normalising does not make sense.")
+    if feature_name is None or not isinstance(feature_name, str):
+        raise ValueError("Provide name of the features the model was trained on.")
 
     # Extract data, create dataloaders
     label_train = data['train']['label']
@@ -193,18 +196,20 @@ def compute_eval_metrics(
         title += f"ICC {icc_train:.2f}"
         axs[1].set_title(title)
 
+        filename = f'./figures/histogram_{str(model)}_' + feature_name + '.png'
         fig.set_size_inches(15, 7)
         plt.suptitle(f"{str(model)} model")
-        plt.savefig(f'./figures/histogram_{str(model)}_autocorr_combined.png', bbox_inches='tight')
+        plt.savefig(filename, bbox_inches='tight')
         plt.close()
 
         # Print estimated density of the output for training and testing set
+        filename = f'./figures/density_{str(model)}_' + feature_name + '.png'
         fig, ax = plt.subplots(1, 1)
         sns.kdeplot(data=output_train, ax=ax, palette=['blue'], label='Training')
         sns.kdeplot(data=output_val, ax=ax, palette=['red'], label='Validation')
         plt.title('Approximate density of model output')
         plt.legend()
-        plt.savefig(f'./figures/model_{str(model)}_density_autocorr.png', bbox_inches='tight')
+        plt.savefig(filename, bbox_inches='tight')
         plt.close()
 
     return_dict = {

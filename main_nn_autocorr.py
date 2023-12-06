@@ -16,7 +16,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch_size = 512
     num_patients = 10
-    num_epochs = 2000
+    num_epochs = 30
     file_format = 'zarr'
 
     # Hyperparameters
@@ -30,6 +30,7 @@ if __name__ == '__main__':
         'eps': 1.4,
         'alpha': 0.8,
     }
+    feature_names = ['mean', 'ar1']
 
     print(f"Using device {device}")
 
@@ -45,7 +46,7 @@ if __name__ == '__main__':
     file_path = (cwd / rel_path).resolve()
     data = load_data(file_path, number_patients=num_patients, normalize=True, verbose=True)
     """
-    data = load_features("data", ['mean', 'std'])
+    data = load_features("data", feature_names)
     # Train test split with deterministic RNG
     data_split = train_test_split(data, perc=.75)
     del data
@@ -81,6 +82,7 @@ if __name__ == '__main__':
         device=device,
         batch_size=batch_size,
         metric='euclidean',
+        feature_name='+'.join(feature_names),
     )
 
 print('Finished executing.')
