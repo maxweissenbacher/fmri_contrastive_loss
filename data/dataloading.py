@@ -1,5 +1,4 @@
 import secrets
-
 import h5py
 import zarr
 import numpy as np
@@ -10,13 +9,15 @@ import time
 from pathlib import Path
 import matplotlib.pyplot as plt
 import scipy
+from data.data_feature_extraction import lookup_feature_index
 
 
-def load_features(path, idx):
+def load_features(path, names):
     """
-    Currently, idx must be a LIST or numpy array!
+    Currently, idx must be a LIST or numpy array of feature names
     """
-    features = np.load(path + "/feature_bank.npy")[:, idx, :]
+    idxs = lookup_feature_index(names)
+    features = np.load(path + "/feature_bank.npy")[:, idxs, :]
     features = torch.tensor(features, dtype=torch.float)
     labels = np.load(path + "/labels.npy")
     labels = torch.tensor(labels, dtype=torch.float)
