@@ -11,6 +11,22 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import scipy
 
+
+def load_features(path, idx):
+    """
+    Currently, idx must be a LIST or numpy array!
+    """
+    features = np.load(path + "/feature_bank.npy")[:, idx, :]
+    features = torch.tensor(features, dtype=torch.float)
+    labels = np.load(path + "/labels.npy")
+    labels = torch.tensor(labels, dtype=torch.float)
+    d = {
+        'label': labels,
+        'features': features,
+    }
+    return d
+
+
 def load_data(path, number_patients=None, normalize=False, verbose=False, load_raw_data=True):
     """
     path points to wherever the dataset is (this depends on where the function is called from)
@@ -156,7 +172,7 @@ class ourDataset(Dataset):
 
     def __getitem__(self, idx):
         # Load the data
-        datapoint = self.dataset[idx,:]
+        datapoint = self.dataset[idx]
         batch_idx = idx
         # Preprocess the image and send it to the chosen device ('cpu' or 'cuda')
         datapoint = datapoint.to(self.the_device)
@@ -167,13 +183,13 @@ def train_test_split(data, perc, seed=None, verbose=False):
     if seed is None:  # If user did not specify seed, choose random seed
         seed = secrets.randbits(128)
     rng = np.random.default_rng(seed)  # Ensure reproducibility of train test split
-    subjects = np.array(list(set(data['subject_number'])))
+    subject_number = np.asarray(data['label'][:, 0], dtype=int)
+    subjects = np.array(list(set(subject_number)))
     nr_subjects = len(subjects)
     nr_subjects_train = int(perc * nr_subjects)
     subjects_train = rng.choice(subjects, nr_subjects_train, replace=False)
-    idxs_train = np.array([s in subjects_train for s in data['subject_number']])
+    idxs_train = np.array([s in subjects_train for s in subject_number])
     idxs_val = np.logical_not(idxs_train)
-
     if verbose:
         print(f"Total number of scans = {data['raw'].shape[0]}, num of scans in training set = {idxs_train.sum()}, num of scans in testing set = {idxs_val.sum()}.")
 

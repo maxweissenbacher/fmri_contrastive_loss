@@ -31,8 +31,8 @@ def compute_eval_metrics(
     label_val = data['val']['label']
     same_subject_train, diff_subject_train = compute_same_diff_from_label(label_train, label_train)
     same_subject_val, diff_subject_val = compute_same_diff_from_label(label_val, label_val)
-    features_train = data['train']['autocorrelation_and_variation']
-    features_val = data['val']['autocorrelation_and_variation']
+    features_train = data['train']['features']
+    features_val = data['val']['features']
 
     # Convert to dataset and dataloader
     dataset_train = ourDataset(features_train, device=device)
@@ -49,7 +49,7 @@ def compute_eval_metrics(
         index_train.append(batch_idx.detach().cpu())
     output_train = torch.vstack(output_train)
     index_train = torch.hstack(index_train)
-    subject_number_train = data['train']['subject_number'][index_train]
+    subject_number_train = np.asarray(data['train']['label'][:, 0], dtype=int)[index_train]
 
     if normalise:
         # Normalise output to [0,1]
@@ -66,7 +66,9 @@ def compute_eval_metrics(
     dist_train = dist_train.detach().numpy()
     # get submatrices of same and diff
     same_train_true = same_subject_train[index_train[:, None], index_train[None, :]]
+    same_train_true = same_train_true.detach().numpy()
     diff_train_true = diff_subject_train[index_train[:, None], index_train[None, :]]
+    diff_train_true = diff_train_true.detach().numpy()
 
     if metric == 'euclidean':
         same_train_pred = (dist_train <= threshold)
@@ -75,8 +77,8 @@ def compute_eval_metrics(
         same_train_pred = (dist_train >= 1 - 2 * threshold)
         diff_train_pred = (dist_train < 1 - 2 * threshold)
 
-    accuracy_same_train = torch.sum((same_train_pred == same_train_true) & (same_train_true == True)) / torch.sum(same_train_true)
-    accuracy_diff_train = torch.sum((diff_train_true == diff_train_pred) & (diff_train_true == True)) / torch.sum(diff_train_true)
+    accuracy_same_train = np.sum((same_train_pred == same_train_true) & (same_train_true == True)) / np.sum(same_train_true)
+    accuracy_diff_train = np.sum((diff_train_true == diff_train_pred) & (diff_train_true == True)) / np.sum(diff_train_true)
 
     # Compute intra-rater reliability (ICC)
     if metric == 'euclidean':
@@ -108,7 +110,7 @@ def compute_eval_metrics(
         index_val.append(batch_idx.detach().cpu())
     output_val = torch.vstack(output_val)
     index_val = torch.hstack(index_val)
-    subject_number_val = data['val']['subject_number'][index_val]
+    subject_number_val = np.asarray(data['val']['label'][:, 0], dtype=int)[index_val]
 
     if normalise:
         # Normalise output to [0,1]
@@ -125,7 +127,9 @@ def compute_eval_metrics(
     dist_val = dist_val.detach().numpy()
     # get submatrices of same and diff
     same_val_true = same_subject_val[index_val[:, None], index_val[None, :]]
+    same_val_true = same_val_true.detach().numpy()
     diff_val_true = diff_subject_val[index_val[:, None], index_val[None, :]]
+    diff_val_true = diff_val_true.detach().numpy()
 
     if metric == 'euclidean':
         same_val_pred = (dist_val <= threshold)
@@ -134,8 +138,8 @@ def compute_eval_metrics(
         same_val_pred = (dist_val >= 1 - 2 * threshold)
         diff_val_pred = (dist_val < 1 - 2 * threshold)
 
-    accuracy_same_val = torch.sum((same_val_pred == same_val_true) & (same_val_true == True)) / torch.sum(same_val_true)
-    accuracy_diff_val = torch.sum((diff_val_true == diff_val_pred) & (diff_val_true == True)) / torch.sum(diff_val_true)
+    accuracy_same_val = np.sum((same_val_pred == same_val_true) & (same_val_true == True)) / np.sum(same_val_true)
+    accuracy_diff_val = np.sum((diff_val_true == diff_val_pred) & (diff_val_true == True)) / np.sum(diff_val_true)
 
     # Compute intra-rater reliability (ICC)
     if metric == 'euclidean':

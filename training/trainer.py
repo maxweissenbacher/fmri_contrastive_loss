@@ -8,13 +8,13 @@ import time
 
 
 class Trainer:
-    def __init__(self, model, model_params, loss_params, data, device, lr, batch_size):
+    def __init__(self, model, model_params, loss_params, labels, features, device, lr, batch_size):
         self.model = model(**model_params).to(device)
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=lr)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.5)
         # Load data
-        self.label = data['label']
-        self.features = data['autocorrelation_and_variation']
+        self.label = labels
+        self.features = features
         # Convert to dataset and dataloader
         dataset = ourDataset(self.features, device=device)
         self.dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -38,15 +38,23 @@ class Trainer:
         for _ in pbar:
             avg_loss = []  # average loss across batches
             avg_gn = []  # average gradient norm across batches
-            # iterate over all data
+            # Compute model output on entire training set
+            output_full = []
+            index_full = []
+            for (d, batch_idx) in self.dataloader:
+                output = self.model.forward(d)
+                output_full.append(output.detach())
+                index_full.append(batch_idx.detach())
+            index_full = torch.hstack(index_full)
+            output_full = torch.vstack(output_full)
+            label_full = self.label[index_full]
+
+            # Iterate over all data to update parameters
             for (d, batch_idx) in self.dataloader:
                 batch_idx = batch_idx.detach().numpy()
-                # ----------
-                # TO-DO: Check if using the same_subject matrix as opposed to the same_subject_train matrix is correct!
-                # ----------
                 label = self.label[batch_idx]
                 output = self.model.forward(d)
-                loss = contr_loss_simple(output, label, output, label, self.eps, self.alpha, metric='euclidean')
+                loss = contr_loss_simple(output, label, output_full, label_full, self.eps, self.alpha, metric='euclidean')
                 self.optimizer.zero_grad()
                 loss.backward()
                 gn = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 100.)

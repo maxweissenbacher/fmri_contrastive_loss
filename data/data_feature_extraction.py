@@ -14,8 +14,6 @@ subjects = list(sorted(data.keys()))
 valid_subjects = []
 timeseries = []
 for i, s in enumerate(subjects):
-    if i > 50:
-        break
     if not data[s]['functional/is_complete'][()]:
         continue
     tss = [data[s]['functional'][str(i + 1)]['timeseries']
@@ -23,18 +21,14 @@ for i, s in enumerate(subjects):
     timeseries.append(np.asarray(tss))
     valid_subjects.append(s)
 
-print('stop here')
-
 timeseries = np.asarray(timeseries)
-ts2 = timeseries.reshape(-1, timeseries.shape[2], timeseries.shape[3])
-assert np.all(ts2[1] == timeseries[0, 1])
-assert np.all(ts2[4] == timeseries[1, 0])
+
+print('Loaded full timeseries.')
 
 feature_bank = []
-for i, subj in enumerate(subjects):
-    print(i)
-    if i > 49:
-        break
+label = []
+for i, subj in enumerate(valid_subjects):
+    print(f"Processing subject {i}")
     for scan in range(0, 4):
         ts_np = timeseries[i][scan]
         mean = np.mean(ts_np, axis=1)
@@ -46,11 +40,11 @@ for i, subj in enumerate(subjects):
                range(1, 10)]
         features = np.concatenate([[mean, var, std, skew, kurt], ars])
         feature_bank.append(features)
+        label.append((i, scan))
 
-print('stop here')
+print('Created feature bank and labels.')
 
 np.save("feature_bank.npy", feature_bank)
+np.save("labels.npy", label)
 
-scannum = np.tile([0, 1, 2, 3], timeseries.shape[0])
-subjnum = np.repeat(range(0, timeseries.shape[0]), 4)
-label = list(zip(subjnum, scannum))
+print('Saved feature bank and labels.')
