@@ -19,6 +19,7 @@ def load_features(path, names):
     idxs = lookup_feature_index(names)
     features = np.load(path + "/feature_bank.npy")[:, idxs, :]
     features = torch.tensor(features, dtype=torch.float)
+    features = torch.transpose(features, 2, 1)
     labels = np.load(path + "/labels.npy")
     labels = torch.tensor(labels, dtype=torch.float)
     d = {

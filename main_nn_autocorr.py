@@ -21,7 +21,7 @@ if __name__ == '__main__':
 
     # Hyperparameters
     model_params = {
-        'dim': 360,  # = 2 * 360
+        'dim': 720,
         'width': 64,
         'depth': 2,
         'nenc': 1,
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     file_path = (cwd / rel_path).resolve()
     data = load_data(file_path, number_patients=num_patients, normalize=True, verbose=True)
     """
-    data = load_features("data", ['mean'])
+    data = load_features("data", ['mean', 'std'])
     # Train test split with deterministic RNG
     data_split = train_test_split(data, perc=.75)
     del data
