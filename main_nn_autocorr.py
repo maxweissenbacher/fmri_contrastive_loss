@@ -36,17 +36,6 @@ if __name__ == '__main__':
     print(f"Using device {device}")
 
     # Load data
-    """
-    if file_format == 'zarr':
-        rel_path = 'data/hcp1200.zarr.zip'
-    elif file_format == 'HDF5':
-        rel_path = 'data/timeseries_max_all_subjects.hdf5'
-    else:
-        raise NotImplementedError
-    cwd = Path.cwd()
-    file_path = (cwd / rel_path).resolve()
-    data = load_data(file_path, number_patients=num_patients, normalize=True, verbose=True)
-    """
     data = load_features("data", feature_names)
     # Train test split with deterministic RNG
     data_split = train_test_split(data, perc=.75)
@@ -87,6 +76,12 @@ if __name__ == '__main__':
         feature_name='+'.join(feature_names),
     )
 
-print('Finished executing.')
+    # Save model
+    filename = f"outputs/model_{str(trainer.model)}"
+    filename += f"_WIDTH-{model_params['width']}_DEPTH-{model_params['depth']}"
+    filename += f"_FEATURES-{'+'.join(feature_names)}.pt"
+    torch.save(trainer.model, filename)
 
+    # Done
+    print(f'Finished executing. Model saved to {filename}.')
 
