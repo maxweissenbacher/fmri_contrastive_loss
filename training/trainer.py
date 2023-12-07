@@ -8,26 +8,26 @@ import time
 
 
 class Trainer:
-    def __init__(self, model, model_params, loss_params, labels, features, device, lr, batch_size):
+    def __init__(self, model, model_params, loss_params, labels, features, device, lr, batch_size, within_batch=False):
         self.model = model(**model_params).to(device)
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=lr)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, factor=0.5)
         # Load data
-        self.label = labels
-        self.features = features
+        self.label = labels.to(device)
         # Convert to dataset and dataloader
-        dataset = ourDataset(self.features, device=device)
+        dataset = ourDataset(features, device=device)
         self.dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
         # Loss hyperparameters
         self.eps = loss_params['eps']
         self.alpha = loss_params['alpha']
         self.device = device
+        self.compute_loss_within_batch = within_batch
 
     def train(self, num_epochs):
         # Testing model output
-        test_num = min(10, self.features.shape[0])
-        output = self.model(self.features[:test_num].to(self.device))
-        print(f'Tested successfully. self.model output has shape {output.shape}')
+        # test_num = min(10, self.features.shape[0])
+        # output = self.model(self.features[:test_num].to(self.device))
+        # print(f'Tested successfully. self.model output has shape {output.shape}')
 
         # Set up for logging training metrics
         losses = []
@@ -38,23 +38,28 @@ class Trainer:
         for _ in pbar:
             avg_loss = []  # average loss across batches
             avg_gn = []  # average gradient norm across batches
-            # Compute model output on entire training set
-            output_full = []
-            index_full = []
-            for (d, batch_idx) in self.dataloader:
-                output = self.model.forward(d)
-                output_full.append(output.detach())
-                index_full.append(batch_idx.detach())
-            index_full = torch.hstack(index_full)
-            output_full = torch.vstack(output_full)
-            label_full = self.label[index_full]
+            # If loss should be computed over the entire train set, compute model output first here
+            if not self.compute_loss_within_batch:
+                output_2 = []
+                index_full = []
+                for (d, batch_idx) in self.dataloader:
+                    output = self.model.forward(d)
+                    output_2.append(output.detach())
+                    index_full.append(batch_idx.detach())
+                index_full = torch.hstack(index_full)
+                output_2 = torch.vstack(output_2)
+                label_2 = self.label[index_full]
 
             # Iterate over all data to update parameters
             for (d, batch_idx) in self.dataloader:
                 batch_idx = batch_idx.detach().numpy()
                 label = self.label[batch_idx]
                 output = self.model.forward(d)
-                loss = contr_loss_simple(output, label, output_full, label_full, self.eps, self.alpha, metric='euclidean')
+                # If loss should be computed only within each batch, do this here:
+                if self.compute_loss_within_batch:
+                    output_2 = output
+                    label_2 = label
+                loss = contr_loss_simple(output, label, output_2, label_2, self.eps, self.alpha, metric='euclidean')
                 self.optimizer.zero_grad()
                 loss.backward()
                 gn = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 100.)

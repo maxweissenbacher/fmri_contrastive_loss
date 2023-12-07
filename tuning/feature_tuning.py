@@ -1,10 +1,6 @@
 import pickle
-from data.dataloading import ourDataset, train_test_split, load_features
+from data.dataloading import train_test_split, load_features
 import torch
-from models.vision_transformer import VisionTransformer
-from torch.utils.data import DataLoader
-from models.losses.contrastive_losses import contr_loss_simple
-import numpy as np
 import optuna
 from training.trainer import Trainer
 from models.nn import Net

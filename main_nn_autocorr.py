@@ -15,6 +15,7 @@ if __name__ == '__main__':
     # Training parameters
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch_size = 512
+    compute_loss_within_batch = False  # Compute loss over entire train set if False, only within batch if True
     num_patients = 10
     num_epochs = 30
     file_format = 'zarr'
@@ -61,6 +62,7 @@ if __name__ == '__main__':
         device=device,
         lr=1e-3,
         batch_size=batch_size,
+        within_batch=compute_loss_within_batch,
     )
     losses = trainer.train(num_epochs)
 
