@@ -9,7 +9,7 @@ import itertools
 from warnings import simplefilter
 
 
-MAX_NUM_COMBINED_FEATURES = 3  # We consider combinations of up to this many features
+MAX_NUM_COMBINED_FEATURES = 1  # We consider combinations of up to this many features
 
 
 def create_feature_combinations(n):
@@ -20,7 +20,7 @@ def create_feature_combinations(n):
     return feature_combinations
 
 
-def objective(trial, batch_size=512, num_epochs=2000):
+def objective(trial, batch_size=512, num_epochs=3000):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     feature_combinations = create_feature_combinations(MAX_NUM_COMBINED_FEATURES)
     feature_names = trial.suggest_categorical('feature', feature_combinations)
@@ -38,8 +38,8 @@ def objective(trial, batch_size=512, num_epochs=2000):
         'nenc': 1,
     }
     loss_params = {
-        'eps': 1.4,
-        'alpha': 0.8,
+        'eps': 1.5,
+        'alpha': 1.0,
     }
 
     # Training
@@ -57,6 +57,11 @@ def objective(trial, batch_size=512, num_epochs=2000):
 
     for epoch, l in enumerate(losses):
         trial.report(l, epoch)
+
+    # Save model for further analysis
+    filename = f"./tuning/outputs/models/MODEL-{str(trainer.model)}_FEATURES-{'+'.join(feature_names)}.pt"
+    torch.save(trainer.model.state_dict(), filename)
+    print(f"Saved trained model with features {'+'.join(feature_names)} to {filename}.")
 
     # Evaluating model performance
     metrics = compute_eval_metrics(
@@ -84,7 +89,7 @@ def feature_tuning():
     )
     study.optimize(objective, n_trials=len(feature_combinations), timeout=72000)  # Timeout is in seconds, 20 hours
 
-    filename = "./tuning/feature_tuning_study.pkl"
+    filename = "./tuning/outputs/feature_tuning_study.pkl"
     with open(filename, "wb") as f:
         pickle.dump(study, f)
     print(f"Saved study '{study.study_name}' to pickle {filename}.")

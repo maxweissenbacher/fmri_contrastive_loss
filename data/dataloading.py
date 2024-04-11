@@ -10,6 +10,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import scipy
 from data.data_feature_extraction import lookup_feature_index
+from sklearn.model_selection import KFold
 
 
 def load_features(path, names):
@@ -208,6 +209,35 @@ def train_test_split(data, perc, seed=None, verbose=False):
     d = {'train': d_train, 'val': d_val}
 
     return d
+
+
+def k_fold_split(data, k, seed=None, verbose=False):
+    if seed is None:  # If user did not specify seed, choose random seed
+        seed = secrets.randbits(32)
+    subject_number = np.asarray(data['label'][:, 0], dtype=int)
+    subjects = np.array(list(set(subject_number)))
+    kf = KFold(n_splits=k, shuffle=True, random_state=seed)
+    kfold_data = []
+
+    for subjects_train, _ in kf.split(subjects):
+        idxs_train = np.array([s in subjects_train for s in subject_number])
+        idxs_val = np.logical_not(idxs_train)
+        if verbose:
+            print(f"Total number of scans = {data['raw'].shape[0]}, num of scans in training set = {idxs_train.sum()}, num of scans in testing set = {idxs_val.sum()}.")
+
+        d_train = {}
+        d_val = {}
+        for key in data.keys():
+            if key in ['same_subject', 'diff_subject']:
+                d_train[key] = data[key][idxs_train, :][:, idxs_train]
+                d_val[key] = data[key][idxs_val, :][:, idxs_val]
+            else:
+                d_train[key] = data[key][idxs_train]
+                d_val[key] = data[key][idxs_val]
+        d = {'train': d_train, 'val': d_val}
+        kfold_data.append(d)
+
+    return kfold_data
 
 
 if __name__ == '__main__':
