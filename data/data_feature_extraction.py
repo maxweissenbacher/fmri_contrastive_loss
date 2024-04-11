@@ -11,7 +11,7 @@ def lookup_feature_index(names):
     idxs = []
     for name in names:
         if name not in feature_names:
-            raise ValueError(f"Feature must be one of {feature_names}. Input was '{x}'.")
+            raise ValueError(f"Feature must be one of {feature_names}. Input was {name}.")
         idxs.append(feature_names.index(name))
     return idxs
 

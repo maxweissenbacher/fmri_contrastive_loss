@@ -6,12 +6,13 @@ from training.trainer import Trainer
 from models.nn import Net
 from metrics.evaluation import compute_eval_metrics
 import numpy as np
+from functools import partial
 
 
-def objective(trial, batch_size=512, num_epochs=3000):
+def objective(trial, feature_names, batch_size=512, num_epochs=3000):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    feature_names = ['mean']  # Fix feature selection for now - probs do this for a few different ones
+    # feature_names = ['mean']  # Fix feature selection for now - probs do this for a few different ones
     num_features = len(feature_names)
 
     # Choose hyperparameters
@@ -79,15 +80,15 @@ def objective(trial, batch_size=512, num_epochs=3000):
     return np.mean(average_metrics)
 
 
-def nn_tuning():
+def nn_tuning(feature_names):
     study = optuna.create_study(
         direction="maximize",
         study_name="NN_hyperparameter_tuning_mean",
         sampler=optuna.samplers.TPESampler()
     )
-    study.optimize(objective, n_trials=1000, timeout=86400)  # Timeout is in seconds, 24 hours
+    study.optimize(partial(objective, feature_names=feature_names), n_trials=1000, timeout=86400)  # Timeout is 24 hours
 
-    filename = "./tuning/outputs/nn_tuning_mean.pkl"
+    filename = "./tuning/outputs/nn_tuning_" + '_'.join(feature_names) + ".pkl"
     with open(filename, "wb") as f:
         pickle.dump(study, f)
     print(f"Saved study '{study.study_name}' to pickle {filename}.")
