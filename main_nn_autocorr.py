@@ -7,38 +7,43 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from metrics.evaluation import compute_eval_metrics
 from training.trainer import Trainer
+import argparse
 
 
 if __name__ == '__main__':
     time_run_started = datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
 
+    # Parse feature name from command line
+    parser = argparse.ArgumentParser(description='NN training')
+    parser.add_argument('feature_name', type=str, help='Name of feature')
+    args = parser.parse_args()
+    name = args.feature_name
+
     # Training parameters
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch_size = 512
     compute_loss_within_batch = False  # Compute loss over entire train set if False, only within batch if True
-    num_patients = 10
-    num_epochs = 30
-    file_format = 'zarr'
+    num_epochs = 3000
 
     # Hyperparameters
     model_params = {
-        'dim': 720,
-        'width': 64,
-        'depth': 2,
+        'dim': 360,
+        'width': 512,
+        'depth': 1,
         'nenc': 1,
     }
     loss_params = {
-        'eps': 1.4,
-        'alpha': 0.8,
+        'eps': 10.,
+        'alpha': 1.0,
     }
-    feature_names = ['mean', 'ar1']
+    feature_names = [name]
 
     print(f"Using device {device}")
 
     # Load data
     data = load_features("data", feature_names)
     # Train test split with deterministic RNG
-    data_split = train_test_split(data, perc=.75)
+    data_split = train_test_split(data, perc=.75, seed=513670296)
     del data
 
     # Training
