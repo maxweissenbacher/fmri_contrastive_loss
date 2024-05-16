@@ -23,7 +23,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch_size = 512
     compute_loss_within_batch = False  # Compute loss over entire train set if False, only within batch if True
-    num_epochs = 30
+    num_epochs = 3000
 
     # Hyperparameters
     model_params = {
