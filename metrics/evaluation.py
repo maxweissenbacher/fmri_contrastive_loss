@@ -14,7 +14,7 @@ def compute_eval_metrics(
         model,
         device,
         batch_size,
-        threshold=0.1,
+        threshold_perc=0.1,
         metric=None,
         normalise=False,  # Normalise output of model to [0,1]; only makes sense if output is 1D
         create_figures=True,
@@ -72,6 +72,8 @@ def compute_eval_metrics(
     same_train_true = same_train_true.detach().numpy()
     diff_train_true = diff_subject_train[index_train[:, None], index_train[None, :]]
     diff_train_true = diff_train_true.detach().numpy()
+
+    threshold = (threshold_perc * torch.std(output_train)).numpy()
 
     if metric == 'euclidean':
         same_train_pred = (dist_train <= threshold)
@@ -133,6 +135,8 @@ def compute_eval_metrics(
     same_val_true = same_val_true.detach().numpy()
     diff_val_true = diff_subject_val[index_val[:, None], index_val[None, :]]
     diff_val_true = diff_val_true.detach().numpy()
+
+    threshold = (threshold_perc * torch.std(output_val)).numpy()
 
     if metric == 'euclidean':
         same_val_pred = (dist_val <= threshold)

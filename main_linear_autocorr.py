@@ -1,4 +1,4 @@
-from data.dataloading import load_data, ourDataset, train_test_split
+from data.dataloading import load_data, ourDataset, train_test_split, load_features
 from pathlib import Path
 import torch
 import numpy as np
@@ -7,43 +7,41 @@ from datetime import datetime
 from metrics.evaluation import compute_eval_metrics
 from training.trainer import Trainer
 from models.linear import LinearLayer
+import argparse
 
 
 if __name__ == '__main__':
     time_run_started = datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
 
+    # Parse feature name from command line
+    parser = argparse.ArgumentParser(description='NN training')
+    parser.add_argument('feature_name', type=str, help='Name of feature')
+    args = parser.parse_args()
+    name = args.feature_name
+
     # Training parameters
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch_size = 512
-    num_patients = None
-    num_epochs = 2000
-    file_format = 'zarr'
+    compute_loss_within_batch = False  # Compute loss over entire train set if False, only within batch if True
+    num_epochs = 30
 
     # Hyperparameters
     model_params = {
-        'in_dim': 720,  # = 2 * 360
-        'out_dim': 10,
+        'in_dim': 360,
+        'out_dim': 1,
     }
     loss_params = {
-        'eps': 1.4,
-        'alpha': 0.8,
+        'eps': 100.,
+        'alpha': 1.0,
     }
+    feature_names = [name]
 
     print(f"Using device {device}")
 
     # Load data
-    if file_format == 'zarr':
-        rel_path = 'data/hcp1200.zarr.zip'
-    elif file_format == 'HDF5':
-        rel_path = 'data/timeseries_max_all_subjects.hdf5'
-    else:
-        raise NotImplementedError
-    cwd = Path.cwd()
-    file_path = (cwd / rel_path).resolve()
-    data = load_data(file_path, number_patients=num_patients, normalize=True, verbose=True)
-
+    data = load_features("data", feature_names)
     # Train test split with deterministic RNG
-    data_split = train_test_split(data, perc=.75, seed=251668716030294078557169461317962359616)
+    data_split = train_test_split(data, perc=.75, seed=513670296)
     del data
 
     # Training
@@ -51,10 +49,12 @@ if __name__ == '__main__':
         model=LinearLayer,
         model_params=model_params,
         loss_params=loss_params,
-        data=data_split['train'],
+        labels=data_split['train']['label'],
+        features=data_split['train']['features'],
         device=device,
-        lr=1e-5,
+        lr=1e-3,
         batch_size=batch_size,
+        within_batch=compute_loss_within_batch,
     )
     losses = trainer.train(num_epochs)
 
@@ -75,8 +75,17 @@ if __name__ == '__main__':
         model=trainer.model,
         device=device,
         batch_size=batch_size,
-        metric='cosine',
+        metric='euclidean',
+        feature_name='+'.join(feature_names),
     )
 
-print('Finished executing.')
+    # Save model
+    filename = f"outputs/model_{str(trainer.model)}"
+    filename += f"_FEATURES-{'+'.join(feature_names)}.pt"
+    torch.save(trainer.model.state_dict(), filename)
+
+    # Done
+    print(f'Finished executing. Model saved to {filename}.')
+
+
 

@@ -1,12 +1,12 @@
 from data.dataloading import load_data, ourDataset, train_test_split, load_features
 from pathlib import Path
 import torch
-from models.nn import Net
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 from metrics.evaluation import compute_eval_metrics
 from training.trainer import Trainer
+from models.linear import LinearLayer
 import argparse
 
 
@@ -27,10 +27,8 @@ if __name__ == '__main__':
 
     # Hyperparameters
     model_params = {
-        'dim': 360,
-        'width': 256,
-        'depth': 1,
-        'nenc': 1,
+        'in_dim': 360,
+        'out_dim': 1,
     }
     loss_params = {
         'eps': 100.,
@@ -44,15 +42,14 @@ if __name__ == '__main__':
     data = load_features("data", feature_names)
     # Train test split with deterministic RNG
     data_split = train_test_split(data, perc=.75, seed=513670296)
-    del data
 
     # Training
     trainer = Trainer(
-        model=Net,
+        model=LinearLayer,
         model_params=model_params,
         loss_params=loss_params,
-        labels=data_split['train']['label'],
-        features=data_split['train']['features'],
+        labels=data['label'],
+        features=data['features'],
         device=device,
         lr=1e-3,
         batch_size=batch_size,
@@ -82,11 +79,12 @@ if __name__ == '__main__':
     )
 
     # Save model
-    filename = f"outputs/model_{str(trainer.model)}"
-    filename += f"_WIDTH-{model_params['width']}_DEPTH-{model_params['depth']}"
+    filename = f"outputs/model_FULLDATA_{str(trainer.model)}"
     filename += f"_FEATURES-{'+'.join(feature_names)}.pt"
     torch.save(trainer.model.state_dict(), filename)
 
     # Done
     print(f'Finished executing. Model saved to {filename}.')
+
+
 
