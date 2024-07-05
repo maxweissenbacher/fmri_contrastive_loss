@@ -15,7 +15,7 @@ if __name__ == '__main__':
 
     # Parse feature name from command line
     parser = argparse.ArgumentParser(description='NN training')
-    parser.add_argument('feature_name', type=str, help='Name of feature')
+    parser.add_argument('--feature_name', type=str, help='Name of feature')
     args = parser.parse_args()
     name = args.feature_name
 
