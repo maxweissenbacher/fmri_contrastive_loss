@@ -1,3 +1,7 @@
 venv
 .idea
 *.hdf5
+logs
+*.png
+*.txt
+*.pkl

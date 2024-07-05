@@ -1,12 +1,41 @@
 import torch
+import torch.nn as nn
+from utils.utils import compute_same_diff_from_label
 
-def contr_loss_simple(output, same, diff, eps):
+
+"""
+def contr_loss_simple(output, same, diff, eps, alpha=1., metric=None):
     # note that when computing the gradient here, we thus need to iterate over all N^2 pairs (N is batchsize)
-    dist = torch.cdist(output, output, p=2)  # gives matrix with (i,j) = l2 norm of (output[i:]-output[j:])
+    if metric == 'euclidean':
+        # Euclidean distance between embeddings
+        dist = torch.cdist(output, output, p=2)  # gives matrix with (i,j) = l2 norm of (output[i:]-output[j:])
+    elif metric == 'cosine':
+        # Cosine similarity between embeddings
+        dist = nn.CosineSimilarity(dim=-1)(output[..., None, :, :], output[..., :, None, :])
+        dist = 1 - dist
+    else:
+        raise NotImplementedError("A metric must be chosen for the loss: either 'euclidean' or 'cosine'.")
     loss_same = torch.mean(torch.pow(torch.masked_select(dist, same), 2))
     loss_diff = torch.mean(torch.pow(torch.clamp(eps - torch.masked_select(dist, diff), 0), 2))
     # return (loss_same + loss_diff)**2 / (dist.shape[0]*dist.shape[1])
-    return loss_same + loss_diff
+    return loss_same + alpha * loss_diff
+"""
+
+
+def contr_loss_simple(output1, label1, output2, label2, eps, alpha=1., metric=None):
+    same, diff = compute_same_diff_from_label(label1, label2)
+    if metric == 'euclidean':
+        # Euclidean distance between embeddings
+        dist = torch.cdist(output1, output2, p=2)  # gives matrix with (i,j) = l2 norm of (output[i:]-output[j:])
+    elif metric == 'cosine':
+        # Cosine similarity between embeddings
+        dist = nn.CosineSimilarity(dim=-1)(output1[..., None, :, :], output2[..., :, None, :])
+        dist = 1 - dist
+    else:
+        raise NotImplementedError("A metric must be chosen for the loss: either 'euclidean' or 'cosine'.")
+    loss_same = torch.mean(torch.pow(torch.masked_select(dist, same), 2))
+    loss_diff = torch.mean(torch.pow(torch.clamp(eps - torch.masked_select(dist, diff), 0), 2))
+    return loss_same + alpha * loss_diff
 
 
 def contr_loss_lifted(output, same, diff, eps):
