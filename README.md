@@ -20,3 +20,5 @@ The script will output into two directories (which are expected to exist before 
 
 - `outputs`: this directory is expected to exist at the same level as the main.py script. It will contain the saved model.
 - `figures`: this directory is expected to exist at the same level as the main.py script. Here we save plots from the evaluation of the trained model.
+
+Furthermore, the script expects to find the file `feature_bank.npy` located in the `data` directory. The `data` directory must be at the same level as the main.py script.
