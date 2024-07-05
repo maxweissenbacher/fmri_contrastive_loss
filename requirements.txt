@@ -9,3 +9,5 @@ spatiotemporal==1.0.1
 torch==2.0.1
 tqdm==4.66.1
 zarr==2.16.1
+seaborn
+pingouin

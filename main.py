@@ -172,7 +172,8 @@ if __name__ == '__main__':
 
     # Save model
     filename = f"outputs/model_{str(trainer.model)}"
-    filename += f"_WIDTH-{model_params['width']}_DEPTH-{model_params['depth']}"
+    if args.model == 'neuralnet':
+        filename += f"_WIDTH-{model_params['width']}_DEPTH-{model_params['depth']}"
     filename += f"_FEATURES-{'+'.join(feature_names)}.pt"
     torch.save(trainer.model.state_dict(), filename)
 
