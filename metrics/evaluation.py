@@ -7,6 +7,7 @@ import torch.nn as nn
 from data.dataloading import ourDataset, DataLoader
 from metrics.icc import icc_full
 from utils.utils import compute_same_diff_from_label
+from sklearn.metrics import precision_recall_curve
 
 
 def compute_eval_metrics(
@@ -211,6 +212,16 @@ def compute_eval_metrics(
         fig, ax = plt.subplots(1, 1)
         sns.kdeplot(data=output_train, ax=ax, palette=['blue'], label='Training')
         sns.kdeplot(data=output_val, ax=ax, palette=['red'], label='Validation')
+        plt.title('Approximate density of model output')
+        plt.legend()
+        plt.savefig(filename, bbox_inches='tight')
+        plt.close()
+
+        # Make recall-precision curve for training set
+        filename = f'./figures/recall_precision_{str(model)}_' + feature_name + '.png'
+        fig, ax = plt.subplots(1, 1)
+        precision, recall, threshold = precision_recall_curve(same_train_true, dist_train)
+        plt.plot(...)
         plt.title('Approximate density of model output')
         plt.legend()
         plt.savefig(filename, bbox_inches='tight')
