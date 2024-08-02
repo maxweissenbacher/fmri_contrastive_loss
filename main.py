@@ -174,6 +174,7 @@ if __name__ == '__main__':
         # Load model
         with open(args.model_path, "rb") as f:
             net = model
+            net = net(**model_params)
             net.load_state_dict(torch.load(f, map_location=torch.device('cpu')))
             net.eval()
 
