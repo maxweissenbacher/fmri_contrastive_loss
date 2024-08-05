@@ -196,6 +196,11 @@ if __name__ == '__main__':
     print(f"Performance on validation set ({int(100-args.train_test_split*100)}%, seed {seed})...")
     print(pd.Series(metrics['val']))
 
+    print('-----------------')
+    print('INFO')
+    print('TNR = true negative rate = (# correctly classified pairs from same subject) / (# pairs from same subjects)')
+    print('TPR = true positive rate = (# correctly classified pairs from different subject) / (# pairs from different subjects)')
+
     # Save performance metrics
     filename = f"outputs/metrics_{str(net)}"
     filename += f"_FEATURES-{'+'.join(feature_names)}.pkl"
