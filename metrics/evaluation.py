@@ -7,7 +7,8 @@ import torch.nn as nn
 from data.dataloading import ourDataset, DataLoader
 from metrics.icc import icc_full
 from utils.utils import compute_same_diff_from_label
-from sklearn.metrics import precision_recall_curve
+from sklearn.metrics import precision_recall_curve, PrecisionRecallDisplay, average_precision_score, RocCurveDisplay, roc_auc_score
+from collections import Counter
 
 
 def compute_eval_metrics(
@@ -102,9 +103,11 @@ def compute_eval_metrics(
         icc_average /= output_train.shape[-1]
         icc_train = icc_average
 
-    print(f'Training set: accuracy on same: {accuracy_same_train:.4f}')
-    print(f'Training set: accuracy on different: {accuracy_diff_train:.4f}')
-    print(f'Training set: ICC {icc_train:.2f}')
+    # Compute ROC AUC for training set
+    roc_auc_train = roc_auc_score(1 - same_train_true.flatten(), dist_train.flatten())
+
+    # Compute average precision for training set
+    average_precision_train = average_precision_score(1 - same_train_true.flatten(), dist_train.flatten())
 
     # Evaluate model performance on testing set
     # Pass through model
@@ -165,9 +168,11 @@ def compute_eval_metrics(
         icc_average /= output_val.shape[-1]
         icc_val = icc_average
 
-    print(f'Testing set:  accuracy on same: {accuracy_same_val:.4f}')
-    print(f'Testing set:  accuracy on different: {accuracy_diff_val:.4f}')
-    print(f'Testing set: ICC {icc_val:.2f}')
+    # Compute ROC AUC for test set
+    roc_auc_val = roc_auc_score(1 - same_val_true.flatten(), dist_val.flatten())
+
+    # Compute average precision (similar to AUC for precision-recall curve)
+    average_precision_val = average_precision_score(1 - same_val_true.flatten(), dist_val.flatten())
 
     if create_figures:
         # Make histograms for training and test set
@@ -218,11 +223,65 @@ def compute_eval_metrics(
         plt.close()
 
         # Make recall-precision curve for training set
-        filename = f'./figures/recall_precision_{str(model)}_' + feature_name + '.png'
-        fig, ax = plt.subplots(1, 1)
-        precision, recall, threshold = precision_recall_curve(same_train_true, dist_train)
-        plt.plot(...)
-        plt.title('Approximate density of model output')
+        filename = f'./figures/recall_precision_train_{str(model)}_' + feature_name + '.png'
+        precision, recall, threshold = precision_recall_curve(1-same_train_true.flatten(), dist_train.flatten())
+        display = PrecisionRecallDisplay(
+            recall=recall,
+            precision=precision,
+            average_precision=average_precision_train,
+            prevalence_pos_label=Counter((1-same_train_true).flatten().ravel())[1] / same_train_true.size,
+        )
+        display.plot(plot_chance_level=True)
+        _ = display.ax_.set_title("Precision-recall curve")
+        plt.legend()
+        plt.savefig(filename, bbox_inches='tight')
+        plt.close()
+
+        # Make recall-precision curve for testing set
+        filename = f'./figures/recall_precision_test_{str(model)}_' + feature_name + '.png'
+        precision, recall, threshold = precision_recall_curve(1 - same_val_true.flatten(), dist_val.flatten())
+        display = PrecisionRecallDisplay(
+            recall=recall,
+            precision=precision,
+            average_precision=average_precision_val,
+            prevalence_pos_label=Counter((1 - same_val_true).flatten().ravel())[1] / same_val_true.size,
+        )
+        display.plot(plot_chance_level=True)
+        _ = display.ax_.set_title("Precision-recall curve")
+        plt.legend()
+        plt.savefig(filename, bbox_inches='tight')
+        plt.close()
+
+        # Make ROC curve for training set
+        filename = f'./figures/ROC_train_{str(model)}_' + feature_name + '.png'
+        display = RocCurveDisplay.from_predictions(
+            1 - same_train_true.flatten(),
+            dist_train.flatten(),
+            name=str(model),
+            plot_chance_level=True,
+        )
+        _ = display.ax_.set(
+            xlabel="False Positive Rate",
+            ylabel="True Positive Rate",
+            title="Receiver Operating Characteristic | training set\nTPR = (# pairs identified as different)/(# different pairs)",
+        )
+        plt.legend()
+        plt.savefig(filename, bbox_inches='tight')
+        plt.close()
+
+        # Make ROC curve for testing set
+        filename = f'./figures/ROC_test_{str(model)}_' + feature_name + '.png'
+        display = RocCurveDisplay.from_predictions(
+            1 - same_val_true.flatten(),
+            dist_val.flatten(),
+            name=str(model),
+            plot_chance_level=True,
+        )
+        _ = display.ax_.set(
+            xlabel="False Positive Rate",
+            ylabel="True Positive Rate",
+            title="Receiver Operating Characteristic | testing set\nTPR = (# pairs identified as different)/(# different pairs)",
+        )
         plt.legend()
         plt.savefig(filename, bbox_inches='tight')
         plt.close()
@@ -234,6 +293,10 @@ def compute_eval_metrics(
         'acc_diff_val': accuracy_diff_val,
         'icc_train': icc_train,
         'icc_val': icc_val,
+        'roc_auc_train': roc_auc_train,
+        'roc_auc_val': roc_auc_val,
+        'avg_precision_train': average_precision_train,
+        'avg_precision_val': average_precision_val,
     }
 
     return return_dict

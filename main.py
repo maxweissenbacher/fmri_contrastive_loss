@@ -11,6 +11,7 @@ from metrics.evaluation import compute_eval_metrics
 from training.trainer import Trainer
 import argparse
 import secrets
+import pandas as pd
 
 
 class ConditionalRequiredAction(argparse.Action):
@@ -179,22 +180,28 @@ if __name__ == '__main__':
             net.eval()
 
     # Evaluating model performance
-    compute_eval_metrics(
+    metrics = compute_eval_metrics(
         data=data_split,
         model=net,
         device=device,
         batch_size=batch_size,
         metric='euclidean',
         feature_name='+'.join(feature_names),
+        create_figures=True,
     )
 
+    print(pd.Series(metrics))
+
     # Save model
-    filename = f"outputs/model_{str(trainer.model)}"
-    if args.model == 'neuralnet':
-        filename += f"_WIDTH-{model_params['width']}_DEPTH-{model_params['depth']}"
-    filename += f"_FEATURES-{'+'.join(feature_names)}.pt"
-    torch.save(trainer.model.state_dict(), filename)
+    if not args.model_path:
+        filename = f"outputs/model_{str(net)}"
+        if args.model == 'neuralnet':
+            filename += f"_WIDTH-{model_params['width']}_DEPTH-{model_params['depth']}"
+        filename += f"_FEATURES-{'+'.join(feature_names)}.pt"
+        torch.save(net.state_dict(), filename)
 
     # Done
-    print(f'Finished executing. Model saved to {filename}.')
+    print(f'Finished executing.')
+    if not args.model_path:
+        print(f"Model saved to {filename}.")
 
