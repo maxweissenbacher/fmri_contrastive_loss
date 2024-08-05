@@ -12,6 +12,7 @@ from training.trainer import Trainer
 import argparse
 import secrets
 import pandas as pd
+import pickle
 
 
 class ConditionalRequiredAction(argparse.Action):
@@ -140,7 +141,7 @@ if __name__ == '__main__':
     # Load data
     data = load_features("data", feature_names)
     # Train test split with deterministic RNG
-    data_split = train_test_split(data, perc=args.train_test_split, seed=args.seed)
+    data_split, seed = train_test_split(data, perc=args.train_test_split, seed=args.seed)
     del data
 
     if not args.model_path:
@@ -190,10 +191,16 @@ if __name__ == '__main__':
         create_figures=True,
     )
 
-    print(f"Performance on training set ({int(args.train_test_split*100)}%)...")
+    print(f"Performance on training set ({int(args.train_test_split*100)}%, seed {seed})...")
     print(pd.Series(metrics['train']))
-    print(f"Performance on validation set ({int(100-args.train_test_split*100)}%)...")
+    print(f"Performance on validation set ({int(100-args.train_test_split*100)}%, seed {seed})...")
     print(pd.Series(metrics['val']))
+
+    # Save performance metrics
+    filename = f"outputs/metrics_{str(net)}"
+    filename += f"_FEATURES-{'+'.join(feature_names)}.pkl"
+    with open(filename, 'wb') as f:
+        pickle.dump(metrics, f)
 
     # Save model
     if not args.model_path:

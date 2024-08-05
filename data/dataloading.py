@@ -208,7 +208,7 @@ def train_test_split(data, perc, seed=None, verbose=False):
 
     d = {'train': d_train, 'val': d_val}
 
-    return d
+    return d, seed
 
 
 def k_fold_split(data, k, seed=None, verbose=False):
