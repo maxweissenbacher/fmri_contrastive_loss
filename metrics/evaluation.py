@@ -287,16 +287,16 @@ def compute_eval_metrics(
         plt.close()
 
     return_dict = {
-        'acc_same_train': accuracy_same_train,
-        'acc_diff_train': accuracy_diff_train,
-        'acc_same_val': accuracy_same_val,
-        'acc_diff_val': accuracy_diff_val,
-        'icc_train': icc_train,
-        'icc_val': icc_val,
-        'roc_auc_train': roc_auc_train,
-        'roc_auc_val': roc_auc_val,
-        'avg_precision_train': average_precision_train,
-        'avg_precision_val': average_precision_val,
+        'train': {
+            'ICC': icc_train,
+            'ROC AUC': roc_auc_train,
+            'Average precision': average_precision_train,
+        },
+        'val': {
+            'ICC': icc_val,
+            'ROC AUC': roc_auc_val,
+            'Average precision': average_precision_val,
+        }
     }
 
     return return_dict

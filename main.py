@@ -190,7 +190,10 @@ if __name__ == '__main__':
         create_figures=True,
     )
 
-    print(pd.Series(metrics))
+    print(f"Performance on training set ({int(args.train_test_split*100)}%)...")
+    print(pd.Series(metrics['train']))
+    print(f"Performance on validation set ({int(100-args.train_test_split*100)}%)...")
+    print(pd.Series(metrics['val']))
 
     # Save model
     if not args.model_path:
