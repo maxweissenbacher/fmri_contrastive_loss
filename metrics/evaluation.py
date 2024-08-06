@@ -119,6 +119,9 @@ def compute_eval_metrics(
     # Compute average precision for training set
     average_precision_train = average_precision_score(1 - same_train_true.flatten(), dist_train.flatten())
 
+    # Compute chance level for training set (i.e. likelihood of classifying something as different correctly by chance)
+    chance_level_train = np.sum(1 - same_train_true) / same_train_true.size
+
     # Evaluate model performance on testing set
     # Pass through model
     output_val = []
@@ -190,6 +193,9 @@ def compute_eval_metrics(
 
     # Compute average precision (similar to AUC for precision-recall curve)
     average_precision_val = average_precision_score(1 - same_val_true.flatten(), dist_val.flatten())
+
+    # Compute chance level for testing set
+    chance_level_val = np.sum(1 - same_val_true) / same_val_true.size
 
     if create_figures:
         # Make histograms for training and test set
@@ -313,6 +319,7 @@ def compute_eval_metrics(
 
     # Construct return dictionary
     train_dict = {
+        'Chance level': chance_level_train,
         'ICC': icc_train,
         'ROC AUC': roc_auc_train,
         'Average precision': average_precision_train,
@@ -325,6 +332,7 @@ def compute_eval_metrics(
     # TPR = (# correctly classified pairs from different subject) / (# pairs from different subjects)
 
     val_dict = {
+        'Chance level': chance_level_val,
         'ICC': icc_val,
         'ROC AUC': roc_auc_val,
         'Average precision': average_precision_val,
