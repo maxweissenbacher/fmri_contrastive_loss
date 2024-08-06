@@ -11,6 +11,8 @@ from metrics.evaluation import compute_eval_metrics
 from training.trainer import Trainer
 import argparse
 import secrets
+import pandas as pd
+import pickle
 
 
 class ConditionalRequiredAction(argparse.Action):
@@ -26,18 +28,25 @@ def parse_from_command_line():
     # Parse feature name from command line
     parser = argparse.ArgumentParser(description='Training')
     parser.add_argument(
+        '--model_path',
+        type=str,
+        help=f'Specify the model path.',
+        required=False  # Ensure the argument is required
+    )
+
+    parser.add_argument(
         '--feature',
         type=str,
         choices=feature_names,
         help=f'Name of feature (must be one of {feature_names})',
-        required=True  # Ensure the argument is required
+        required=True,
     )
     parser.add_argument(
         '--model',
         type=str,
         choices=models,
         help=f'The model to be used for training (must be one of {models})',
-        required=True  # Ensure the argument is required
+        required=True,
     )
     parser.add_argument(
         '--eps',
@@ -97,13 +106,13 @@ if __name__ == '__main__':
 
     # Parse from command line and set up model and features
     args = parse_from_command_line()
+
+    # General hyperparameters
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    batch_size = 512
     feature_names = [args.feature]
     model = {'linear': LinearLayer, 'neuralnet': Net}
     model = model[args.model]
-
-    # Training parameters
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    batch_size = 512
     compute_loss_within_batch = False  # Compute loss over entire train set if False, only within batch if True
     num_epochs = args.epochs
 
@@ -132,51 +141,82 @@ if __name__ == '__main__':
     # Load data
     data = load_features("data", feature_names)
     # Train test split with deterministic RNG
-    data_split = train_test_split(data, perc=args.train_test_split, seed=args.seed)
+    data_split, seed = train_test_split(data, perc=args.train_test_split, seed=args.seed)
     del data
 
-    # Training
-    trainer = Trainer(
-        model=model,
-        model_params=model_params,
-        loss_params=loss_params,
-        labels=data_split['train']['label'],
-        features=data_split['train']['features'],
-        device=device,
-        lr=1e-3,
-        batch_size=batch_size,
-        within_batch=compute_loss_within_batch,
-    )
-    losses = trainer.train(num_epochs)
+    if not args.model_path:
+        # Training
+        trainer = Trainer(
+            model=model,
+            model_params=model_params,
+            loss_params=loss_params,
+            labels=data_split['train']['label'],
+            features=data_split['train']['features'],
+            device=device,
+            lr=1e-3,
+            batch_size=batch_size,
+            within_batch=compute_loss_within_batch,
+        )
+        losses = trainer.train(num_epochs)
 
-    # Save losses to txt file
-    filename = f"./logs/loss_{str(trainer.model)}_autocorr_{time_run_started}.txt"
-    with open(filename, "w") as f:
-        np.savetxt(f, np.array(losses))
-    # Plot losses and save to figure
-    filename = f"./logs/loss_{str(trainer.model)}_autocorr_{time_run_started}.png"
-    plt.plot(losses)
-    plt.title('Losses (averaged over batches) by epoch')
-    plt.savefig(filename)
-    plt.close()
+        # Save losses to txt file
+        filename = f"./logs/loss_{str(trainer.model)}_autocorr_{time_run_started}.txt"
+        with open(filename, "w") as f:
+            np.savetxt(f, np.array(losses))
+        # Plot losses and save to figure
+        filename = f"./logs/loss_{str(trainer.model)}_autocorr_{time_run_started}.png"
+        plt.plot(losses)
+        plt.title('Losses (averaged over batches) by epoch')
+        plt.savefig(filename)
+        plt.close()
+
+        net = trainer.model
+
+    if args.model_path:
+        # Load model
+        with open(args.model_path, "rb") as f:
+            net = model
+            net = net(**model_params)
+            net.load_state_dict(torch.load(f, map_location=torch.device('cpu')))
+            net.eval()
 
     # Evaluating model performance
-    compute_eval_metrics(
+    metrics = compute_eval_metrics(
         data=data_split,
-        model=trainer.model,
+        model=net,
         device=device,
         batch_size=batch_size,
         metric='euclidean',
         feature_name='+'.join(feature_names),
+        create_figures=True,
     )
 
+    print(f"Performance on training set ({int(args.train_test_split*100)}%, seed {seed})...")
+    print(pd.Series(metrics['train']))
+    print(f"Performance on validation set ({int(100-args.train_test_split*100)}%, seed {seed})...")
+    print(pd.Series(metrics['val']))
+
+    print('-----------------')
+    print('INFO')
+    print('TNR = true negative rate = (# correctly classified pairs from same subject) / (# pairs from same subjects)')
+    print('TPR = true positive rate = (# correctly classified pairs from different subject) / (# pairs from different subjects)')
+
+    # Save performance metrics
+    filename = f"outputs/metrics_{str(net)}"
+    filename += f"_FEATURES-{'+'.join(feature_names)}.pkl"
+    with open(filename, 'wb') as f:
+        pickle.dump(metrics, f)
+
     # Save model
-    filename = f"outputs/model_{str(trainer.model)}"
-    if args.model == 'neuralnet':
-        filename += f"_WIDTH-{model_params['width']}_DEPTH-{model_params['depth']}"
-    filename += f"_FEATURES-{'+'.join(feature_names)}.pt"
-    torch.save(trainer.model.state_dict(), filename)
+    if not args.model_path:
+        filename = f"outputs/model_{str(net)}"
+        if args.model == 'neuralnet':
+            filename += f"_WIDTH-{model_params['width']}_DEPTH-{model_params['depth']}"
+        filename += f"_FEATURES-{'+'.join(feature_names)}.pt"
+        torch.save(net.state_dict(), filename)
 
     # Done
-    print(f'Finished executing. Model saved to {filename}.')
+    print(f'Finished executing.')
+    if not args.model_path:
+        print(f"Model saved to {filename}.")
 

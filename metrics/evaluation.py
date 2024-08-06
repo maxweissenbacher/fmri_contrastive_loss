@@ -7,6 +7,8 @@ import torch.nn as nn
 from data.dataloading import ourDataset, DataLoader
 from metrics.icc import icc_full
 from utils.utils import compute_same_diff_from_label
+from sklearn.metrics import precision_recall_curve, PrecisionRecallDisplay, average_precision_score, RocCurveDisplay, roc_auc_score
+from collections import Counter
 
 
 def compute_eval_metrics(
@@ -14,7 +16,6 @@ def compute_eval_metrics(
         model,
         device,
         batch_size,
-        threshold_perc=0.1,
         metric=None,
         normalise=False,  # Normalise output of model to [0,1]; only makes sense if output is 1D
         create_figures=True,
@@ -28,6 +29,10 @@ def compute_eval_metrics(
         raise NotImplementedError("Using cosine similarity and normalising does not make sense.")
     if feature_name is None or not isinstance(feature_name, str):
         raise ValueError("Provide name of the features the model was trained on.")
+
+    # Set threshold values
+    # These values are percentages of the standard deviation of the latent space
+    threshold_percentages = [0.1, 0.25, 0.5, 0.75, 1.]
 
     # Extract data, create dataloaders
     label_train = data['train']['label']
@@ -73,17 +78,24 @@ def compute_eval_metrics(
     diff_train_true = diff_subject_train[index_train[:, None], index_train[None, :]]
     diff_train_true = diff_train_true.detach().numpy()
 
-    threshold = (threshold_perc * torch.std(output_train)).numpy()
-
-    if metric == 'euclidean':
-        same_train_pred = (dist_train <= threshold)
-        diff_train_pred = (dist_train > threshold)
-    elif metric == 'cosine':
-        same_train_pred = (dist_train >= 1 - 2 * threshold)
-        diff_train_pred = (dist_train < 1 - 2 * threshold)
-
-    accuracy_same_train = np.sum((same_train_pred == same_train_true) & (same_train_true == True)) / np.sum(same_train_true)
-    accuracy_diff_train = np.sum((diff_train_true == diff_train_pred) & (diff_train_true == True)) / np.sum(diff_train_true)
+    tnrs_train = []
+    tprs_train = []
+    f1s_train = []
+    for threshold_perc in threshold_percentages:
+        threshold = (threshold_perc * torch.std(output_train)).numpy()
+        if metric == 'euclidean':
+            same_train_pred = (dist_train <= threshold)
+            diff_train_pred = (dist_train > threshold)
+        elif metric == 'cosine':
+            same_train_pred = (dist_train >= 1 - 2 * threshold)
+            diff_train_pred = (dist_train < 1 - 2 * threshold)
+        tnr_train = np.sum(same_train_pred & same_train_true) / np.sum(same_train_true)
+        tpr_train = np.sum(diff_train_pred & diff_train_true) / np.sum(diff_train_true)
+        prec_train = np.sum(diff_train_pred & diff_train_true) / np.sum(diff_train_pred)
+        f1 = 2 * tpr_train * prec_train / (tpr_train + prec_train)
+        tnrs_train.append(tnr_train)
+        tprs_train.append(tpr_train)
+        f1s_train.append(f1)
 
     # Compute intra-rater reliability (ICC)
     if metric == 'euclidean':
@@ -101,9 +113,14 @@ def compute_eval_metrics(
         icc_average /= output_train.shape[-1]
         icc_train = icc_average
 
-    print(f'Training set: accuracy on same: {accuracy_same_train:.4f}')
-    print(f'Training set: accuracy on different: {accuracy_diff_train:.4f}')
-    print(f'Training set: ICC {icc_train:.2f}')
+    # Compute ROC AUC for training set
+    roc_auc_train = roc_auc_score(1 - same_train_true.flatten(), dist_train.flatten())
+
+    # Compute average precision for training set
+    average_precision_train = average_precision_score(1 - same_train_true.flatten(), dist_train.flatten())
+
+    # Compute chance level for training set (i.e. likelihood of classifying something as different correctly by chance)
+    chance_level_train = np.sum(1 - same_train_true) / same_train_true.size
 
     # Evaluate model performance on testing set
     # Pass through model
@@ -136,17 +153,24 @@ def compute_eval_metrics(
     diff_val_true = diff_subject_val[index_val[:, None], index_val[None, :]]
     diff_val_true = diff_val_true.detach().numpy()
 
-    threshold = (threshold_perc * torch.std(output_val)).numpy()
-
-    if metric == 'euclidean':
-        same_val_pred = (dist_val <= threshold)
-        diff_val_pred = (dist_val > threshold)
-    elif metric == 'cosine':
-        same_val_pred = (dist_val >= 1 - 2 * threshold)
-        diff_val_pred = (dist_val < 1 - 2 * threshold)
-
-    accuracy_same_val = np.sum((same_val_pred == same_val_true) & (same_val_true == True)) / np.sum(same_val_true)
-    accuracy_diff_val = np.sum((diff_val_true == diff_val_pred) & (diff_val_true == True)) / np.sum(diff_val_true)
+    tnrs_val = []
+    tprs_val = []
+    f1s_val = []
+    for threshold_perc in threshold_percentages:
+        threshold = (threshold_perc * torch.std(output_val)).numpy()
+        if metric == 'euclidean':
+            same_val_pred = (dist_val <= threshold)
+            diff_val_pred = (dist_val > threshold)
+        elif metric == 'cosine':
+            same_val_pred = (dist_val >= 1 - 2 * threshold)
+            diff_val_pred = (dist_val < 1 - 2 * threshold)
+        tnr_val = np.sum(same_val_pred & same_val_true) / np.sum(same_val_true)
+        tpr_val = np.sum(diff_val_pred & diff_val_true) / np.sum(diff_val_true)
+        prec_val = np.sum(diff_val_pred & diff_val_true) / np.sum(diff_val_pred)
+        f1 = 2 * tpr_val * prec_val / (tpr_val + prec_val)
+        tnrs_val.append(tnr_val)
+        tprs_val.append(tpr_val)
+        f1s_val.append(f1)
 
     # Compute intra-rater reliability (ICC)
     if metric == 'euclidean':
@@ -164,9 +188,14 @@ def compute_eval_metrics(
         icc_average /= output_val.shape[-1]
         icc_val = icc_average
 
-    print(f'Testing set:  accuracy on same: {accuracy_same_val:.4f}')
-    print(f'Testing set:  accuracy on different: {accuracy_diff_val:.4f}')
-    print(f'Testing set: ICC {icc_val:.2f}')
+    # Compute ROC AUC for test set
+    roc_auc_val = roc_auc_score(1 - same_val_true.flatten(), dist_val.flatten())
+
+    # Compute average precision (similar to AUC for precision-recall curve)
+    average_precision_val = average_precision_score(1 - same_val_true.flatten(), dist_val.flatten())
+
+    # Compute chance level for testing set
+    chance_level_val = np.sum(1 - same_val_true) / same_val_true.size
 
     if create_figures:
         # Make histograms for training and test set
@@ -182,7 +211,7 @@ def compute_eval_metrics(
         title = "Testing set\n"
         title += f"diff of medians: {np.median(sames) - np.median(diffs):.2f}"
         title += f" | diff of means: {np.mean(sames) - np.mean(diffs):.2f}\n"
-        title += f"acc on same: {accuracy_same_val:.4f} | acc on different: {accuracy_diff_val:.4f}\n"
+        title += f"acc on same: {tpr_val:.4f} | acc on different: {tnr_val:.4f}\n"
         title += f"ICC {icc_val:.2f}"
         axs[0].set_title(title)
 
@@ -196,7 +225,7 @@ def compute_eval_metrics(
         title = "Training set\n"
         title += f"diff of medians: {np.median(sames) - np.median(diffs):.2f}"
         title += f" | diff of means: {np.mean(sames) - np.mean(diffs):.2f}\n"
-        title += f"acc on same: {accuracy_same_train:.4f} | acc on different: {accuracy_diff_train:.4f}\n"
+        title += f"acc on same: {tpr_train:.4f} | acc on different: {tnr_train:.4f}\n"
         title += f"ICC {icc_train:.2f}"
         axs[1].set_title(title)
 
@@ -216,13 +245,106 @@ def compute_eval_metrics(
         plt.savefig(filename, bbox_inches='tight')
         plt.close()
 
+        # Make recall-precision curve for training set
+        filename = f'./figures/recall_precision_train_{str(model)}_' + feature_name + '.png'
+        precision, recall, threshold = precision_recall_curve(1-same_train_true.flatten(), dist_train.flatten())
+        f1_train = 2 * precision * recall / (precision + recall)
+        max_idx_train = np.argmax(f1_train)
+        max_f1_train = f1_train[max_idx_train]
+        max_f1_threshold_train = threshold[max_idx_train]
+        display = PrecisionRecallDisplay(
+            recall=recall,
+            precision=precision,
+            average_precision=average_precision_train,
+            prevalence_pos_label=Counter((1-same_train_true).flatten().ravel())[1] / same_train_true.size,
+        )
+        display.plot(plot_chance_level=True)
+        _ = display.ax_.set_title("Precision-recall curve | train")
+        plt.legend()
+        plt.savefig(filename, bbox_inches='tight')
+        plt.close()
+
+        # Make recall-precision curve for testing set
+        filename = f'./figures/recall_precision_test_{str(model)}_' + feature_name + '.png'
+        precision, recall, threshold = precision_recall_curve(1 - same_val_true.flatten(), dist_val.flatten())
+        f1_val = 2 * precision * recall / (precision + recall)
+        max_idx_val = np.argmax(f1_val)
+        max_f1_val = f1_val[max_idx_val]
+        max_f1_threshold_val = threshold[max_idx_val]
+        display = PrecisionRecallDisplay(
+            recall=recall,
+            precision=precision,
+            average_precision=average_precision_val,
+            prevalence_pos_label=Counter((1 - same_val_true).flatten().ravel())[1] / same_val_true.size,
+        )
+        display.plot(plot_chance_level=True)
+        _ = display.ax_.set_title("Precision-recall curve | test")
+        plt.legend()
+        plt.savefig(filename, bbox_inches='tight')
+        plt.close()
+
+        # Make ROC curve for training set
+        filename = f'./figures/ROC_train_{str(model)}_' + feature_name + '.png'
+        display = RocCurveDisplay.from_predictions(
+            1 - same_train_true.flatten(),
+            dist_train.flatten(),
+            name=str(model),
+            plot_chance_level=True,
+        )
+        _ = display.ax_.set(
+            xlabel="False Positive Rate",
+            ylabel="True Positive Rate",
+            title="Receiver Operating Characteristic | training set\nTPR = (# pairs identified as different)/(# different pairs)",
+        )
+        plt.legend()
+        plt.savefig(filename, bbox_inches='tight')
+        plt.close()
+
+        # Make ROC curve for testing set
+        filename = f'./figures/ROC_test_{str(model)}_' + feature_name + '.png'
+        display = RocCurveDisplay.from_predictions(
+            1 - same_val_true.flatten(),
+            dist_val.flatten(),
+            name=str(model),
+            plot_chance_level=True,
+        )
+        _ = display.ax_.set(
+            xlabel="False Positive Rate",
+            ylabel="True Positive Rate",
+            title="Receiver Operating Characteristic | testing set\nTPR = (# pairs identified as different)/(# different pairs)",
+        )
+        plt.legend()
+        plt.savefig(filename, bbox_inches='tight')
+        plt.close()
+
+    # Construct return dictionary
+    train_dict = {
+        'Chance level': chance_level_train,
+        'ICC': icc_train,
+        'ROC AUC': roc_auc_train,
+        'Average precision': average_precision_train,
+        f"Maximum F1 (at threshold = {max_f1_threshold_train})": max_f1_train,
+    }
+    train_dict.update(dict(zip([f"TNR (threshold {int(t*100)}% of std)" for t in threshold_percentages], tnrs_train)))
+    train_dict.update(dict(zip([f"TPR (threshold {int(t * 100)}% of std)" for t in threshold_percentages], tprs_train)))
+    train_dict.update(dict(zip([f"F1 (threshold {int(t * 100)}% of std)" for t in threshold_percentages], f1s_train)))
+    # Here, TNR = (# correctly classified pairs from same subject) / (# pairs from same subjects)
+    # TPR = (# correctly classified pairs from different subject) / (# pairs from different subjects)
+
+    val_dict = {
+        'Chance level': chance_level_val,
+        'ICC': icc_val,
+        'ROC AUC': roc_auc_val,
+        'Average precision': average_precision_val,
+        f"Maximum F1 (at threshold = {max_f1_threshold_val})": max_f1_val,
+    }
+    val_dict.update(dict(zip([f"TNR (threshold {int(t*100)}% of std)" for t in threshold_percentages], tnrs_val)))
+    val_dict.update(dict(zip([f"TPR (threshold {int(t * 100)}% of std)" for t in threshold_percentages], tprs_val)))
+    val_dict.update(dict(zip([f"F1 (threshold {int(t * 100)}% of std)" for t in threshold_percentages], f1s_val)))
+
     return_dict = {
-        'acc_same_train': accuracy_same_train,
-        'acc_diff_train': accuracy_diff_train,
-        'acc_same_val': accuracy_same_val,
-        'acc_diff_val': accuracy_diff_val,
-        'icc_train': icc_train,
-        'icc_val': icc_val,
+        'train': train_dict,
+        'val': val_dict,
     }
 
     return return_dict
